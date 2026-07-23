@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WorldGrid — Le mini-jeu géographique sur les pays du monde</title>
+<meta name="description" content="Trouvez les 9 pays du monde qui correspondent aux critères de la grille !">
+<style>
+:root{
+  --bg:#f8f9fa; --card:#ffffff; --ink:#212529; --muted:#6c757d;
+  --accent:#3b5bdb; --accent2:#4c6ef5; --ok:#2f9e44; --err:#e03131;
+  --hex:#e9ecef; --hexok:#d3f9d8; --line:#dee2e6;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;display:flex;flex-direction:column;align-items:center}
+header{width:100%;max-width:640px;padding:14px 16px 6px;text-align:center}
+h1{font-size:1.6rem;letter-spacing:.5px}
+h1 .globe{font-size:1.3rem}
+.regle{margin:8px auto 0;max-width:520px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:.85rem}
+.regle b{color:var(--accent)}
+.bar{display:flex;justify-content:center;gap:18px;margin:10px 0 2px;font-size:.9rem}
+.bar .v{font-weight:700;font-size:1.05rem}
+.bar .err .v{color:var(--err)}
+.bar .pts .v{color:var(--accent)}
+main{width:100%;max-width:640px;padding:0 8px 24px}
+.gridwrap{display:grid;grid-template-columns:92px repeat(3,1fr);gap:6px;margin-top:12px}
+.crit{display:flex;align-items:center;justify-content:center;text-align:center;font-size:.72rem;font-weight:600;line-height:1.25;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px 4px;min-height:44px}
+.crit.row{writing-mode:initial}
+.corner{background:transparent;border:none}
+.cell{position:relative;aspect-ratio:1/.9;cursor:pointer;border:none;background:transparent;padding:0}
+.hex{position:absolute;inset:0;background:var(--hex);clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;transition:transform .12s, background .2s}
+.cell:hover .hex{transform:scale(1.04);background:#dde1e6}
+.cell.filled .hex{background:var(--hexok);cursor:default}
+.cell.filled:hover .hex{transform:none}
+.cell .q{font-size:1.5rem;color:var(--muted)}
+.cell .cnt{font-size:.6rem;color:var(--accent);font-weight:700;background:#e7ebff;border-radius:8px;padding:1px 7px}
+.cell .flag{font-size:1.9rem;line-height:1}
+.cell .nomp{font-size:.62rem;font-weight:700;text-align:center;max-width:92%;line-height:1.1}
+.cell .ptsp{font-size:.65rem;color:var(--ok);font-weight:700}
+.cell.shake .hex{animation:shake .35s}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.actions{display:flex;justify-content:center;gap:10px;margin-top:16px;flex-wrap:wrap}
+button.btn{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:10px 16px;font-size:.9rem;font-weight:600;cursor:pointer}
+button.btn.sec{background:var(--card);color:var(--ink);border:1px solid var(--line)}
+button.btn:hover{filter:brightness(1.08)}
+.hint{color:var(--muted);font-size:.78rem;text-align:center;margin-top:10px}
+/* modal */
+.overlay{position:fixed;inset:0;background:rgba(33,37,41,.45);display:none;align-items:flex-start;justify-content:center;padding:8vh 12px;z-index:10}
+.overlay.open{display:flex}
+.modal{background:var(--card);border-radius:14px;max-width:460px;width:100%;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.2);max-height:80vh;overflow:auto}
+.modal h2{font-size:1.05rem;margin-bottom:10px}
+.modal .crits{font-size:.85rem;margin-bottom:12px;color:var(--muted)}
+.modal .crits b{color:var(--ink)}
+.modal input{width:100%;padding:10px 12px;font-size:1rem;border:2px solid var(--line);border-radius:10px;outline:none}
+.modal input:focus{border-color:var(--accent2)}
+.sugg{margin-top:8px;display:flex;flex-direction:column;gap:4px}
+.sugg button{display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:.92rem;cursor:pointer;text-align:left}
+.sugg button:hover,.sugg button.sel{background:#e7ebff;border-color:var(--accent2)}
+.sugg button:disabled{opacity:.45;cursor:not-allowed}
+.close{float:right;background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted)}
+.sols li{display:flex;align-items:center;gap:8px;padding:5px 2px;border-bottom:1px solid var(--line);font-size:.9rem;list-style:none}
+.sols li span:first-child{flex:1}
+.sols .val{color:var(--muted);font-size:.78rem;white-space:nowrap}
+.sols .p{font-weight:700;color:var(--accent);white-space:nowrap}
+.endcard{text-align:center}
+.endcard .big{font-size:2.2rem;font-weight:800;color:var(--accent);margin:8px 0}
+.helpbody{font-size:.88rem;line-height:1.5}
+.helpbody ul{margin:8px 0 8px 18px}
+.helpbody li{margin-bottom:4px}
+footer{color:var(--muted);font-size:.72rem;padding:12px;text-align:center}
+@media(max-width:480px){.gridwrap{grid-template-columns:64px repeat(3,1fr)}.crit{font-size:.6rem}.cell .flag{font-size:1.5rem}.cell .nomp{font-size:.55rem}}
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="globe">🌍</span> WorldGrid</h1>
+  <div class="regle">🏆 Règle de la partie : <b id="regle"></b></div>
+  <div class="bar">
+    <div class="pts">Score <span class="v" id="score">0</span></div>
+    <div class="err">Erreurs <span class="v" id="erreurs">0</span></div>
+    <div>Cases <span class="v" id="cases">0/9</span></div>
+  </div>
+</header>
+<main>
+  <div class="gridwrap" id="grid"></div>
+  <div class="actions">
+    <button class="btn" id="newBtn">🔄 Nouvelle grille</button>
+    <button class="btn sec" id="revealBtn">🏳️ Abandonner</button>
+    <button class="btn sec" id="helpBtn">❓ Comment jouer</button>
+  </div>
+  <p class="hint">Chaque pays ne peut servir qu'une seule fois. Les solutions détaillées sont révélées à la fin de la partie.</p>
+</main>
+<footer>WorldGrid — inspiré de hexagrid.fr &middot; 195 pays &middot; données world-countries (ODbL)</footer>
+
+<!-- Modal saisie / solutions -->
+<div class="overlay" id="cellOverlay">
+  <div class="modal">
+    <button class="close" data-close>✕</button>
+    <h2 id="cellTitle">Choisir un pays</h2>
+    <div class="crits" id="cellCrits"></div>
+    <div id="inputZone">
+      <input type="text" id="guessInput" placeholder="Tapez un nom de pays…" autocomplete="off">
+      <div class="sugg" id="suggList"></div>
+    </div>
+    <ul class="sols" id="solList" style="display:none"></ul>
+  </div>
+</div>
+
+<!-- Modal fin -->
+<div class="overlay" id="endOverlay">
+  <div class="modal endcard">
+    <button class="close" data-close>✕</button>
+    <h2 id="endTitle">Grille terminée ! 🎉</h2>
+    <div class="big" id="finalScore"></div>
+    <p id="finalDetail" style="font-size:.85rem;color:var(--muted)"></p>
+    <p id="bestScore" style="font-size:.8rem;margin-top:6px"></p>
+    <p style="font-size:.8rem;color:var(--muted);margin-top:8px">Cliquez sur chaque case pour voir le détail des réponses (valeur et points).</p>
+    <div class="actions"><button class="btn sec" data-close>📋 Voir le détail</button><button class="btn" id="againBtn">🔄 Rejouer</button></div>
+  </div>
+</div>
+
+<!-- Modal aide -->
+<div class="overlay" id="helpOverlay">
+  <div class="modal">
+    <button class="close" data-close>✕</button>
+    <h2>Comment jouer</h2>
+    <div class="helpbody">
+      <p>Remplissez la grille avec <b>9 pays du monde</b> (195 pays possibles). Chaque case doit respecter le critère de sa ligne <b>et</b> celui de sa colonne.</p>
+      <ul>
+        <li><b>Un pays ne peut servir qu'une seule fois</b> : choisissez bien par quelle case commencer !</li>
+        <li><b>Bonne réponse :</b> 100 pts pour la <i>meilleure</i> réponse selon la règle de la partie ; les autres choix valides rapportent moins (minimum 40 pts).</li>
+        <li><b>Bonus :</b> +10 pts par ligne ou colonne complétée, +40 pts pour la grille entière.</li>
+        <li><b>Erreur :</b> −10 pts.</li>
+        <li><b>Score maximum : 1000 pts</b> — un score parfait est toujours possible !</li>
+        <li>Chaque case vide affiche le <b>nombre de réponses encore possibles</b> : commencez par les cases les plus contraintes.</li>
+      </ul>
+      <p>La règle change à chaque partie (pays le plus vaste, le moins peuplé…). Les solutions détaillées (valeur et points de chaque réponse) ne sont consultables qu'une fois la grille terminée — ou abandonnée.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+const PAYS = [{"code":"AF","nom":"Afghanistan","continent":"Asie","sousregion":"Southern Asia","capitale":"Kaboul","enclave":true,"voisins":["IR","PK","TM","UZ","TJ","CN"],"superficie":652230,"population":37172386,"langues":["Dari","Pashto","Turkmen"],"monnaies":["AFN"],"monnaienoms":["Afghan afghani"],"drapeau":"🇦🇫","couleurs":["noir","rouge","vert"]},{"code":"AO","nom":"Angola","continent":"Afrique","sousregion":"Middle Africa","capitale":"Luanda","enclave":false,"voisins":["CG","CD","ZM","NA"],"superficie":1246700,"population":30809762,"langues":["Portuguese"],"monnaies":["AOA"],"monnaienoms":["Angolan kwanza"],"drapeau":"🇦🇴","couleurs":["jaune","noir","rouge"]},{"code":"AL","nom":"Albanie","continent":"Europe","sousregion":"Southeast Europe","capitale":"Tirana","enclave":false,"voisins":["ME","GR","MK","XK"],"superficie":28748,"population":2866376,"langues":["Albanian"],"monnaies":["ALL"],"monnaienoms":["Albanian lek"],"drapeau":"🇦🇱","couleurs":["noir","rouge"]},{"code":"AD","nom":"Andorre","continent":"Europe","sousregion":"Southern Europe","capitale":"Andorre-la-Vieille","enclave":true,"voisins":["FR","ES"],"superficie":468,"population":77006,"langues":["Catalan"],"monnaies":["EUR"],"monnaienoms":["Euro"],"drapeau":"🇦🇩","couleurs":["bleu","jaune","orange","rouge"]},{"code":"AE","nom":"Émirats arabes unis","continent":"Asie","sousregion":"Western Asia","capitale":"Abu Dhabi","enclave":false,"voisins":["OM","SA"],"superficie":83600,"population":9630959,"langues":["Arabic"],"monnaies":["AED"],"monnaienoms":["United Arab Emirates dirham"],"drapeau":"🇦🇪","couleurs":["blanc","noir","rouge","vert"]},{"code":"AR","nom":"Argentine","continent":"Amériques","sousregion":"South America","capitale":"Buenos Aires","enclave":false,"voisins":["BO","BR","CL","PY","UY"],"superficie":2780400,"population":44494502,"langues":["Guaraní","Spanish"],"monnaies":["ARS"],"monnaienoms":["Argentine peso"],"drapeau":"🇦🇷","couleurs":["blanc","bleu"]},{"code":"AM","nom":"Arménie","continent":"Asie","sousregion":"Western Asia","capitale":"Erevan","enclave":true,"voisins":["AZ","GE","IR","TR"],"superficie":29743,"population":2951776,"langues":["Armenian"],"monnaies":["AMD"],"monnaienoms":["Armenian dram"],"drapeau":"🇦🇲","couleurs":["bleu","jaune","rouge"]},{"code":"AG","nom":"Antigua-et-Barbuda","continent":"Amériques","sousregion":"Caribbean","capitale":"Saint John's","enclave":false,"voisins":[],"superficie":442,"population":96286,"langues":["English"],"monnaies":["XCD"],"monnaienoms":["Eastern Caribbean dollar"],"drapeau":"🇦🇬","couleurs":["blanc","bleu","jaune","noir","rouge"]},{"code":"AU","nom":"Australie","continent":"Océanie","sousregion":"Australia and New Zealand","capitale":"Canberra","enclave":false,"voisins":[],"superficie":7692024,"population":24982688,"langues":["English"],"monnaies":["AUD"],"monnaienoms":["Australian dollar"],"drapeau":"🇦🇺","couleurs":["blanc","bleu","rouge"]},{"code":"AT","nom":"Autriche","continent":"Europe","sousregion":"Central Europe","capitale":"Vienne","enclave":true,"voisins":["CZ","DE","HU","IT","LI","SK","SI","CH"],"superficie":83871,"population":8840521,"langues":["Austro-Bavarian German"],"monnaies":["EUR"],"monnaienoms":["Euro"],"drapeau":"🇦🇹","couleurs":["blanc","rouge"]},{"code":"AZ","nom":"Azerbaïdjan","continent":"Asie","sousregion":"Western Asia","capitale":"Bakou","enclave":true,"voisins":["AM","GE","IR","RU","TR"],"superficie":86600,"population":9939800,"langues":["Azerbaijani","Russian"],"monnaies":["AZN"],"monnaienoms":["Azerbaijani manat"],"drapeau":"🇦🇿","couleurs":["bleu","rouge","vert"]},{"code":"BI","nom":"Burundi","continent":"Afrique","sousregion":"Eastern Africa","capitale":"Gitega","enclave":true,"voisins":["CD","RW","TZ"],"superficie":27834,"population":11175378,"langues":["French","Kirundi"],"monnaies":["BIF"],"monnaienoms":["Burundian franc"],"drapeau":"🇧🇮","couleurs":["blanc","rouge","vert"]},{"code":"BE","nom":"Belgique","continent":"Europe","sousregion":"Western Europe","capitale":"Bruxelles","enclave":false,"voisins":["FR","DE","LU","NL"],"superficie":30528,"population":11433256,"langues":["German","French","Dutch"],"monnaies":["EUR"],"monnaienoms":["Euro"],"drapeau":"🇧🇪","couleurs":["jaune","noir","rouge"]},{"code":"BJ","nom":"Bénin","continent":"Afrique","sousregion":"Western Africa","capitale":"Porto-Novo","enclave":false,"voisins":["BF","NE","NG","TG"],"superficie":112622,"population":11485048,"langues":["French"],"monnaies":["XOF"],"monnaienoms":["West African CFA franc"],"drapeau":"🇧🇯","couleurs":["jaune","rouge","vert"]},{"code":"BF","nom":"Burkina Faso","continent":"Afrique","sousregion":"Western Africa","capitale":"Ouagadougou","enclave":true,"voisins":["BJ","CI","GH","ML","NE","TG"],"superficie":272967,"population":19751535,"langues":["French"],"monnaies":["XOF"],"monnaienoms":["West African CFA franc"],"drapeau":"🇧🇫","couleurs":["jaune","rouge","vert"]},{"code":"BD","nom":"Bangladesh","continent":"Asie","sousregion":"Southern Asia","capitale":"Dhaka","enclave":false,"voisins":["MM","IN"],"superficie":147570,"population":161356039,"langues":["Bengali"],"monnaies":["BDT"],"monnaienoms":["Bangladeshi taka"],"drapeau":"🇧🇩","couleurs":["rouge","vert"]},{"code":"BG","nom":"Bulgarie","continent":"Europe","sousregion":"Southeast Europe","capitale":"Sofia","enclave":false,"voisins":["GR","MK","RO","RS","TR"],"superficie":110879,"population":7025037,"langues":["Bulgarian"],"monnaies":["BGN"],"monnaienoms":["Bulgarian lev"],"drapeau":"🇧🇬","couleurs":["blanc","rouge","vert"]},{"code":"BH","nom":"Bahreïn","continent":"Asie","sousregion":"Western Asia","capitale":"Manama","enclave":false,"voisins":[],"superficie":765,"population":1569439,"langues":["Arabic"],"monnaies":["BHD"],"monnaienoms":["Bahraini dinar"],"drapeau":"🇧🇭","couleurs":["blanc","rouge"]},{"code":"BS","nom":"Bahamas","continent":"Amériques","sousregion":"Caribbean","capitale":"Nassau","enclave":false,"voisins":[],"superficie":13943,"population":385640,"langues":["English"],"monnaies":["BSD","USD"],"monnaienoms":["Bahamian dollar","United States dollar"],"drapeau":"🇧🇸","couleurs":["bleu","jaune","noir"]},{"code":"BA","nom":"Bosnie-Herzégovine","continent":"Europe","sousregion":"Southeast Europe","capitale":"Sarajevo","enclave":false,"voisins":["HR","ME","RS"],"superficie":51209,"population":3323929,"langues":["Bosnian","Croatian","Serbian"],"monnaies":["BAM"],"monnaienoms":["Bosnia and Herzegovina convertible mark"],"drapeau":"🇧🇦","couleurs":["bleu","jaune"]},{"code":"BY","nom":"Biélorussie","continent":"Europe","sousregion":"Eastern Europe","capitale":"Minsk","enclave":true,"voisins":["LV","LT","PL","RU","UA"],"superficie":207600,"population":9483499,"langues":["Belarusian","Russian"],"monnaies":["BYN"],"monnaienoms":["Belarusian ruble"],"drapeau":"🇧🇾","couleurs":["rouge","vert"]},{"code":"BZ","nom":"Belize","continent":"Amériques","sousregion":"Central America","capitale":"Belmopan","enclave":false,"voisins":["GT","MX"],"superficie":22966,"population":383071,"langues":["Belizean Creole","English","Spanish"],"monnaies":["BZD"],"monnaienoms":["Belize dollar"],"drapeau":"🇧🇿","couleurs":["blanc","bleu","rouge","vert"]},{"code":"BO","nom":"Bolivie","continent":"Amériques","sousregion":"South America","capitale":"Sucre","enclave":true,"voisins":["AR","BR","CL","PY","PE"],"superficie":1098581,"population":11353142,"langues":["Aymara","Guaraní","Quechua","Spanish"],"monnaies":["BOB"],"monnaienoms":["Bolivian boliviano"],"drapeau":"🇧🇴","couleurs":["jaune","rouge","vert"]},{"code":"BR","nom":"Brésil","continent":"Amériques","sousregion":"South America","capitale":"Brasilia","enclave":false,"voisins":["AR","BO","CO","GF","GY","PY","PE","SR","UY","VE"],"superficie":8515767,"population":209469333,"langues":["Portuguese"],"monnaies":["BRL"],"monnaienoms":["Brazilian real"],"drapeau":"🇧🇷","couleurs":["bleu","jaune","vert"]},{"code":"BB","nom":"Barbade","continent":"Amériques","sousregion":"Caribbean","capitale":"Bridgetown","enclave":false,"voisins":[],"superficie":430,"population":286641,"langues":["English"],"monnaies":["BBD"],"monnaienoms":["Barbadian dollar"],"drapeau":"🇧🇧","couleurs":["bleu","jaune"]},{"code":"BN","nom":"Brunei","continent":"Asie","sousregion":"South-Eastern Asia","capitale":"Bandar Seri Begawan","enclave":false,"voisins":["MY"],"superficie":5765,"population":428962,"langues":["Malay"],"monnaies":["BND","SGD"],"monnaienoms":["Brunei dollar","Singapore dollar"],"drapeau":"🇧🇳","couleurs":["blanc","jaune","noir","rouge"]},{"code":"BT","nom":"Bhoutan","continent":"Asie","sousregion":"Southern Asia","capitale":"Thimphu","enclave":true,"voisins":["CN","IN"],"superficie":38394,"population":754394,"langues":["Dzongkha"],"monnaies":["BTN","INR"],"monnaienoms":["Bhutanese ngultrum","Indian rupee"],"drapeau":"🇧🇹","couleurs":["blanc","jaune","orange"]},{"code":"BW","nom":"Botswana","continent":"Afrique","sousregion":"Southern Africa","capitale":"Gaborone","enclave":true,"voisins":["NA","ZA","ZM","ZW"],"superficie":582000,"population":2254126,"langues":["English","Tswana"],"monnaies":["BWP"],"monnaienoms":["Botswana pula"],"drapeau":"🇧🇼","couleurs":["blanc","bleu","noir"]},{"code":"CF","nom":"République centrafricaine","continent":"Afrique","sousregion":"Middle Africa","capitale":"Bangui","enclave":true,"voisins":["CM","TD","CD","CG","SS","SD"],"superficie":622984,"population":4666377,"langues":["French","Sango"],"monnaies":["XAF"],"monnaienoms":["Central African CFA franc"],"drapeau":"🇨🇫","couleurs":["blanc","bleu","jaune","rouge","vert"]},{"code":"CA","nom":"Canada","continent":"Amériques","sousregion":"North America","capitale":"Ottawa","enclave":false,"voisins":["US"],"superficie":9984670,"population":37057765,"langues":["English","French"],"monnaies":["CAD"],"monnaienoms":["Canadian dollar"],"drapeau":"🇨🇦","couleurs":["blanc","rouge"]},{"code":"CH","nom":"Suisse","continent":"Europe","sousregion":"Western Europe","capitale":"Berne","enclave":true,"voisins":["AT","FR","IT","LI","DE"],"superficie":41284,"population":8513227,"langues":["French","Swiss German","Italian","Romansh"],"monnaies":["CHF"],"monnaienoms":["Swiss franc"],"drapeau":"🇨🇭","couleurs":["blanc","rouge"]},{"code":"CL","nom":"Chili","continent":"Amériques","sousregion":"South America","capitale":"Santiago","enclave":false,"voisins":["AR","BO","PE"],"superficie":756102,"population":18729160,"langues":["Spanish"],"monnaies":["CLP"],"monnaienoms":["Chilean peso"],"drapeau":"🇨🇱","couleurs":["blanc","bleu","rouge"]},{"code":"CN","nom":"Chine","continent":"Asie","sousregion":"Eastern Asia","capitale":"Pékin","enclave":false,"voisins":["AF","BT","MM","HK","IN","KZ","NP","KP","KG","LA","MO","MN","PK","RU","TJ","VN"],"superficie":9706961,"population":1392730000,"langues":["Chinese"],"monnaies":["CNY"],"monnaienoms":["Chinese yuan"],"drapeau":"🇨🇳","couleurs":["rouge"]},{"code":"CI","nom":"Côte d'Ivoire","continent":"Afrique","sousregion":"Western Africa","capitale":"Yamoussoukro","enclave":false,"voisins":["BF","GH","GN","LR","ML"],"superficie":322463,"population":25069229,"langues":["French"],"monnaies":["XOF"],"monnaienoms":["West African CFA franc"],"drapeau":"🇨🇮","couleurs":["blanc","orange","vert"]},{"code":"CM","nom":"Cameroun","continent":"Afrique","sousregion":"Middle Africa","capitale":"Yaoundé","enclave":false,"voisins":["CF","TD","CG","GQ","GA","NG"],"superficie":475442,"population":25216237,"langues":["English","French"],"monnaies":["XAF"],"monnaienoms":["Central African CFA franc"],"drapeau":"🇨🇲","couleurs":["bleu","jaune","rouge"]},{"code":"CD","nom":"Congo (Rép. dém.)","continent":"Afrique","sousregion":"Middle Africa","capitale":"Kinshasa","enclave":false,"voisins":["AO","BI","CF","CG","RW","SS","TZ","UG","ZM"],"superficie":2344858,"population":84068091,"langues":["French","Kikongo","Lingala","Tshiluba","Swahili"],"monnaies":["CDF"],"monnaienoms":["Congolese franc"],"drapeau":"🇨🇩","couleurs":["bleu","jaune","rouge"]},{"code":"CG","nom":"Congo","continent":"Afrique","sousregion":"Middle Africa","capitale":"Brazzaville","enclave":false,"voisins":["AO","CM","CF","CD","GA"],"superficie":342000,"population":5244363,"langues":["French","Kikongo","Lingala"],"monnaies":["XAF"],"monnaienoms":["Central African CFA franc"],"drapeau":"🇨🇬","couleurs":["jaune","rouge","vert"]},{"code":"CO","nom":"Colombie","continent":"Amériques","sousregion":"South America","capitale":"Bogota","enclave":false,"voisins":["BR","EC","PA","PE","VE"],"superficie":1141748,"population":49648685,"langues":["Spanish"],"monnaies":["COP"],"monnaienoms":["Colombian peso"],"drapeau":"🇨🇴","couleurs":["bleu","jaune","rouge"]},{"code":"KM","nom":"Comores","continent":"Afrique","sousregion":"Eastern Africa","capitale":"Moroni","enclave":false,"voisins":[],"superficie":1862,"population":832322,"langues":["Arabic","French","Comorian"],"monnaies":["KMF"],"monnaienoms":["Comorian franc"],"drapeau":"🇰🇲","couleurs":["blanc","bleu","jaune","rouge","vert"]},{"code":"CV","nom":"Îles du Cap-Vert","continent":"Afrique","sousregion":"Western Africa","capitale":"Praia","enclave":false,"voisins":[],"superficie":4033,"population":543767,"langues":["Portuguese"],"monnaies":["CVE"],"monnaienoms":["Cape Verdean escudo"],"drapeau":"🇨🇻","couleurs":["blanc","bleu","rouge"]},{"code":"CR","nom":"Costa Rica","continent":"Amériques","sousregion":"Central America","capitale":"San José","enclave":false,"voisins":["NI","PA"],"superficie":51100,"population":4999441,"langues":["Spanish"],"monnaies":["CRC"],"monnaienoms":["Costa Rican colón"],"drapeau":"🇨🇷","couleurs":["blanc","bleu","rouge"]},{"code":"CU","nom":"Cuba","continent":"Amériques","sousregion":"Caribbean","capitale":"La Havane","enclave":false,"voisins":[],"superficie":109884,"population":11338138,"langues":["Spanish"],"monnaies":["CUC","CUP"],"monnaienoms":["Cuban convertible peso","Cuban peso"],"drapeau":"🇨🇺","couleurs":["blanc","bleu","rouge"]},{"code":"CY","nom":"Chypre","continent":"Europe","sousregion":"Southern Europe","capitale":"Nicosie","enclave":false,"voisins":[],"superficie":9251,"population":1189265,"langues":["Greek","Turkish"],"monnaies":["EUR"],"monnaienoms":["Euro"],"drapeau":"🇨🇾","couleurs":["blanc","orange"]},{"code":"CZ","nom":"Tchéquie","continent":"Europe","sousregion":"Central Europe","capitale":"Prague","enclave":true,"voisins":["AT","DE","PL","SK"],"superficie":78865,"population":10629928,"langues":["Czech","Slovak"],"monnaies":["CZK"],"monnaienoms":["Czech koruna"],"drapeau":"🇨🇿","couleurs":["blanc","bleu","rouge"]},{"code":"DE","nom":"Allemagne","continent":"Europe","sousregion":"Western Europe","capitale":"Berlin","enclave":false,"voisins":["AT","BE","CZ","DK","FR","LU","NL","PL","CH"],"superficie":357114,"population":82905782,"langues":["German"],"monnaies":["EUR"],"monnaienoms":["Euro"],"drapeau":"🇩🇪","couleurs":["jaune","noir","rouge"]},{"code":"DJ","nom":"Djibouti","continent":"Afrique","sousregion":"Eastern Africa","capitale":"Djibouti","enclave":false,"voisins":["ER","ET","SO"],"superficie":23200,"population":958920,"langues":["Arabic","French"],"monnaies":["DJF"],"monnaienoms":["Djiboutian franc"],"drapeau":"🇩🇯","couleurs":["bleu","rouge","vert"]},{"code":"DM","nom":"Dominique","continent":"Amériques","sousregion":"Caribbean","capitale":"Roseau","enclave":false,"voisins":[],"superficie":751,"population":71625,"langues":["English"],"monnaies":["XCD"],"monnaienoms":["Eastern Caribbean dollar"],"drapeau":"🇩🇲","couleurs":["blanc","jaune","noir","rouge","vert"]},{"code":"DK","nom":"Danemark","continent":"Europe","sousregion":"Northern Europe","capitale":"Copenhague","enclave":false,"voisins":["DE"],"superficie":43094,"population":5793636,"langues":["Danish"],"monnaies":["DKK"],"monnaienoms":["Danish krone"],"drapeau":"🇩🇰","couleurs":["blanc","rouge"]},{"code":"DO","nom":"République dominicaine","continent":"Amériques","sousregion":"Caribbean","capitale":"Saint-Domingue","enclave":false,"voisins":["HT"],"superficie":48671,"population":10627165,"langues":["Spanish"],"monnaies":["DOP"],"monnaienoms":["Dominican peso"],"drapeau":"🇩🇴","couleurs":["blanc","bleu","rouge"]},{"code":"DZ","nom":"Algérie","continent":"Afrique","sousregion":"Northern Africa","capitale":"Alger","enclave":false,"voisins":["TN","LY","NE","EH","MR","ML","MA"],"superficie":2381741,"population":42228429,"langues":["Arabic"],"monnaies":["DZD"],"monnaienoms":["Algerian dinar"],"drapeau":"🇩🇿","couleurs":["blanc","rouge","vert"]},{"code":"EC","nom":"Équateur","continent":"Amériques","sousregion":"South America","capitale":"Quito","enclave":false,"voisins":["CO","PE"],"superficie":276841,"population":17084357,"langues":["Spanish"],"monnaies":["USD"],"monnaienoms":["United States dollar"],"drapeau":"🇪🇨","couleurs":["bleu","jaune","orange","rouge"]},{"code":"EG","nom":"Égypte","continent":"Afrique","sousregion":"Northern Africa","capitale":"Le Caire","enclave":false,"voisins":["IL","LY","PS","SD"],"superficie":1002450,"population":98423595,"langues":["Arabic"],"monnaies":["EGP"],"monnaienoms":["Egyptian pound"],"drapeau":"🇪🇬","couleurs":["blanc","noir","rouge"]},{"code":"ER","nom":"Érythrée","continent":"Afrique","sousregion":"Eastern Africa","capitale":"Asmara","enclave":false,"voisins":["DJ","ET","SD"],"superficie":117600,"population":6213972,"langues":["Arabic","English","Tigrinya"],"monnaies":["ERN"],"monnaienoms":["Eritrean nakfa"],"drapeau":"🇪🇷","couleurs":["bleu","jaune","rouge","vert"]},{"code":"ES","nom":"Espagne","continent":"Europe","sousregion":"Southern Europe","capitale":"Madrid","enclave":false,"voisins":["AD","FR","GI","PT","MA"],"superficie":505992,"population":46796540,"langues":["Spanish"],"monnaies":["EUR"],"monnaienoms":["Euro"],"drapeau":"🇪🇸","couleurs":["jaune","rouge"]},{"code":"EE","nom":"Estonie","continent":"Europe","sousregion":"Northern Europe","capitale":"Tallinn","enclave":false,"voisins":["LV","RU"],"superficie":45227,"population":1321977,"langues":["Estonian"],"monnaies":["EUR"],"monnaienoms":["Euro"],"drapeau":"🇪🇪","couleurs":["blanc","bleu","noir"]},{"code":"ET","nom":"Éthiopie","continent":"Afrique","sousregion":"Eastern Africa","capitale":"Addis-Abeba","enclave":true,"voisins":["DJ","ER","KE","SO","SS","SD"],"superficie":1104300,"population":109224559,"langues":["Amharic"],"monnaies":["ETB"],"monnaienoms":["Ethiopian birr"],"drapeau":"🇪🇹","couleurs":["bleu","jaune","rouge","vert"]},{"code":"FI","nom":"Finlande","continent":"Europe","sousregion":"Northern Europe","capitale":"Helsinki","enclave":false,"voisins":["NO","SE","RU"],"superficie":338424,"population":5515525,"langues":["Finnish","Swedish"],"monnaies":["EUR"],"monnaienoms":["Euro"],"drapeau":"🇫🇮","couleurs":["blanc","bleu"]},{"code":"FJ","nom":"Fidji","continent":"Océanie","sousregion":"Melanesia","capitale":"Suva","enclave":false,"voisins":[],"superficie":18272,"population":883483,"langues":["English","Fijian","Fiji Hindi"],"monnaies":["FJD"],"monnaienoms":["Fijian dollar"],"drapeau":"🇫🇯","couleurs":["blanc","bleu","rouge"]},{"code":"FR","nom":"France","continent":"Europe","sousregion":"Western Europe","capitale":"Paris","enclave":false,"voisins":["AD","BE","DE","IT","LU","MC","ES","CH"],"superficie":551695,"population":66977107,"langues":["French"],"monnaies":["EUR"],"monnaienoms":["Euro"],"drapeau":"🇫🇷","couleurs":["blanc","bleu","rouge"]},{"code":"FM","nom":"Micronésie","continent":"Océanie","sousregion":"Micronesia","capitale":"Palikir","enclave":false,"voisins":[],"superficie":702,"population":112640,"langues":["English"],"monnaies":[],"monnaienoms":[],"drapeau":"🇫🇲","couleurs":["bleu"]},{"code":"GA","nom":"Gabon","continent":"Afrique","sousregion":"Middle Africa","capitale":"Libreville","enclave":false,"voisins":["CM","CG","GQ"],"superficie":267668,"population":2119275,"langues":["French"],"monnaies":["XAF"],"monnaienoms":["Central African CFA franc"],"drapeau":"🇬🇦","couleurs":["bleu","jaune","vert"]},{"code":"GB","nom":"Royaume-Uni","continent":"Europe","sousregion":"Northern Europe","capitale":"Londres","enclave":false,"voisins":["IE"],"superficie":242900,"population":66460344,"langues":["English"],"monnaies":["GBP"],"monnaienoms":["British pound"],"drapeau":"🇬🇧","couleurs":["blanc","bleu","rouge"]},{"code":"GE","nom":"Géorgie","continent":"Asie","sousregion":"Western Asia","capitale":"Tbilissi","enclave":false,"voisins":["AM","AZ","RU","TR"],"superficie":69700,"population":3726549,"langues":["Georgian"],"monnaies":["GEL"],"monnaienoms":["lari"],"drapeau":"🇬🇪","couleurs":["blanc","rouge"]},{"code":"GH","nom":"Ghana","continent":"Afrique","sousregion":"Western Africa","capitale":"Accra","enclave":false,"voisins":["BF","CI","TG"],"superficie":238533,"population":29767108,"langues":["English"],"monnaies":["GHS"],"monnaienoms":["Ghanaian cedi"],"drapeau":"🇬🇭","couleurs":["jaune","rouge","vert"]},{"code":"GN","nom":"Guinée","continent":"Afrique","sousregion":"Western Africa","capitale":"Conakry","enclave":false,"voisins":["CI","GW","LR","ML","SN","SL"],"superficie":245857,"population":12414318,"langues":["French"],"monnaies":["GNF"],"monnaienoms":["Guinean franc"],"drapeau":"🇬🇳","couleurs":["jaune","rouge","vert"]},{"code":"GM","nom":"Gambie","continent":"Afrique","sousregion":"Western Africa","capitale":"Banjul","enclave":false,"voisins":["SN"],"superficie":10689,"population":2280102,"langues":["English"],"monnaies":["GMD"],"monnaienoms":["dalasi"],"drapeau":"🇬🇲","couleurs":["blanc","bleu","rouge","vert"]},{"code":"GW","nom":"Guinée-Bissau","continent":"Afrique","sousregion":"Western Africa","capitale":"Bissau","enclave":false,"voisins":["GN","SN"],"superficie":36125,"population":1874309,"langues":["Portuguese","Upper Guinea Creole"],"monnaies":["XOF"],"monnaienoms":["West African CFA franc"],"drapeau":"🇬🇼","couleurs":["jaune","rouge","vert"]},{"code":"GQ","nom":"Guinée équatoriale","continent":"Afrique","sousregion":"Middle Africa","capitale":"Malabo","enclave":false,"voisins":["CM","GA"],"superficie":28051,"population":1308974,"langues":["French","Portuguese","Spanish"],"monnaies":["XAF"],"monnaienoms":["Central African CFA franc"],"drapeau":"🇬🇶","couleurs":["blanc","bleu","rouge","vert"]},{"code":"GR","nom":"Grèce","continent":"Europe","sousregion":"Southern Europe","capitale":"Athènes","enclave":false,"voisins":["AL","BG","TR","MK"],"superficie":131990,"population":10731726,"langues":["Greek"],"monnaies":["EUR"],"monnaienoms":["Euro"],"drapeau":"🇬🇷","couleurs":["blanc","bleu"]},{"code":"GD","nom":"Grenade","continent":"Amériques","sousregion":"Caribbean","capitale":"St. George's","enclave":false,"voisins":[],"superficie":344,"population":111454,"langues":["English"],"monnaies":["XCD"],"monnaienoms":["Eastern Caribbean dollar"],"drapeau":"🇬🇩","couleurs":["bleu","jaune","rouge"]},{"code":"GT","nom":"Guatemala","continent":"Amériques","sousregion":"Central America","capitale":"Guatemala City","enclave":false,"voisins":["BZ","SV","HN","MX"],"superficie":108889,"population":17247807,"langues":["Spanish"],"monnaies":["GTQ"],"monnaienoms":["Guatemalan quetzal"],"drapeau":"🇬🇹","couleurs":["blanc","bleu"]},{"code":"GY","nom":"Guyana","continent":"Amériques","sousregion":"South America","capitale":"Georgetown","enclave":false,"voisins":["BR","SR","VE"],"superficie":214969,"population":779004,"langues":["English"],"monnaies":["GYD"],"monnaienoms":["Guyanese dollar"],"drapeau":"🇬🇾","couleurs":["jaune","rouge","vert"]},{"code":"HN","nom":"Honduras","continent":"Amériques","sousregion":"Central America","capitale":"Tegucigalpa","enclave":false,"voisins":["GT","SV","NI"],"superficie":112492,"population":9587522,"langues":["Spanish"],"monnaies":["HNL"],"monnaienoms":["Honduran lempira"],"drapeau":"🇭🇳","couleurs":["blanc","bleu"]},{"code":"HR","nom":"Croatie","continent":"Europe","sousregion":"Southeast Europe","capitale":"Zagreb","enclave":false,"voisins":["BA","HU","ME","RS","SI"],"superficie":56594,"population":4087843,"langues":["Croatian"],"monnaies":["EUR"],"monnaienoms":["Euro"],"drapeau":"🇭🇷","couleurs":["blanc","bleu","rouge"]},{"code":"HT","nom":"Haïti","continent":"Amériques","sousregion":"Caribbean","capitale":"Port-au-Prince","enclave":false,"voisins":["DO"],"superficie":27750,"population":11123176,"langues":["French","Haitian Creole"],"monnaies":["HTG"],"monnaienoms":["Haitian gourde"],"drapeau":"🇭🇹","couleurs":["bleu","rouge"]},{"code":"HU","nom":"Hongrie","continent":"Europe","sousregion":"Central Europe","capitale":"Budapest","enclave":true,"voisins":["AT","HR","RO","RS","SK","SI","UA"],"superficie":93028,"population":9775564,"langues":["Hungarian"],"monnaies":["HUF"],"monnaienoms":["Hungarian forint"],"drapeau":"🇭🇺","couleurs":["blanc","rouge","vert"]},{"code":"ID","nom":"Indonésie","continent":"Asie","sousregion":"South-Eastern Asia","capitale":"Jakarta","enclave":false,"voisins":["TL","MY","PG"],"superficie":1904569,"population":267663435,"langues":["Indonesian"],"monnaies":["IDR"],"monnaienoms":["Indonesian rupiah"],"drapeau":"🇮🇩","couleurs":["blanc","rouge"]},{"code":"IN","nom":"Inde","continent":"Asie","sousregion":"Southern Asia","capitale":"New Delhi","enclave":false,"voisins":["BD","BT","MM","CN","NP","PK"],"superficie":3287590,"population":1352617328,"langues":["English","Hindi","Tamil"],"monnaies":["INR"],"monnaienoms":["Indian rupee"],"drapeau":"🇮🇳","couleurs":["blanc","orange","vert"]},{"code":"IE","nom":"Irlande","continent":"Europe","sousregion":"Northern Europe","capitale":"Dublin","enclave":false,"voisins":["GB"],"superficie":70273,"population":4867309,"langues":["English","Irish"],"monnaies":["EUR"],"monnaienoms":["Euro"],"drapeau":"🇮🇪","couleurs":["blanc","orange","vert"]},{"code":"IR","nom":"Iran","continent":"Asie","sousregion":"Southern Asia","capitale":"Téhéran","enclave":false,"voisins":["AF","AM","AZ","IQ","PK","TR","TM"],"superficie":1648195,"population":81800269,"langues":["Persian (Farsi)"],"monnaies":["IRR"],"monnaienoms":["Iranian rial"],"drapeau":"🇮🇷","couleurs":["blanc","rouge","vert"]},{"code":"IQ","nom":"Irak","continent":"Asie","sousregion":"Western Asia","capitale":"Bagdad","enclave":false,"voisins":["IR","JO","KW","SA","SY","TR"],"superficie":438317,"population":38433600,"langues":["Arabic","Aramaic","Sorani"],"monnaies":["IQD"],"monnaienoms":["Iraqi dinar"],"drapeau":"🇮🇶","couleurs":["blanc","noir","rouge"]},{"code":"IS","nom":"Islande","continent":"Europe","sousregion":"Northern Europe","capitale":"Reykjavik","enclave":false,"voisins":[],"superficie":103000,"population":352721,"langues":["Icelandic"],"monnaies":["ISK"],"monnaienoms":["Icelandic króna"],"drapeau":"🇮🇸","couleurs":["blanc","bleu","rouge"]},{"code":"IL","nom":"Israël","continent":"Asie","sousregion":"Western Asia","capitale":"Jérusalem","enclave":false,"voisins":["EG","JO","LB","PS","SY"],"superficie":20770,"population":8882800,"langues":["Arabic","Hebrew"],"monnaies":["ILS"],"monnaienoms":["Israeli new shekel"],"drapeau":"🇮🇱","couleurs":["blanc","bleu"]},{"code":"IT","nom":"Italie","continent":"Europe","sousregion":"Southern Europe","capitale":"Rome","enclave":false,"voisins":["AT","FR","SM","SI","CH","VA"],"superficie":301336,"population":60421760,"langues":["Italian"],"monnaies":["EUR"],"monnaienoms":["Euro"],"drapeau":"🇮🇹","couleurs":["blanc","rouge","vert"]},{"code":"JM","nom":"Jamaïque","continent":"Amériques","sousregion":"Caribbean","capitale":"Kingston","enclave":false,"voisins":[],"superficie":10991,"population":2934855,"langues":["English","Jamaican Patois"],"monnaies":["JMD"],"monnaienoms":["Jamaican dollar"],"drapeau":"🇯🇲","couleurs":["jaune","noir","vert"]},{"code":"JO","nom":"Jordanie","continent":"Asie","sousregion":"Western Asia","capitale":"Amman","enclave":false,"voisins":["IQ","IL","PS","SA","SY"],"superficie":89342,"population":9956011,"langues":["Arabic"],"monnaies":["JOD"],"monnaienoms":["Jordanian dinar"],"drapeau":"🇯🇴","couleurs":["blanc","noir","rouge","vert"]},{"code":"JP","nom":"Japon","continent":"Asie","sousregion":"Eastern Asia","capitale":"Tokyo","enclave":false,"voisins":[],"superficie":377930,"population":126529100,"langues":["Japanese"],"monnaies":["JPY"],"monnaienoms":["Japanese yen"],"drapeau":"🇯🇵","couleurs":["blanc","rouge"]},{"code":"KZ","nom":"Kazakhstan","continent":"Asie","sousregion":"Central Asia","capitale":"Astana","enclave":true,"voisins":["CN","KG","RU","TM","UZ"],"superficie":2724900,"population":18272430,"langues":["Kazakh","Russian"],"monnaies":["KZT"],"monnaienoms":["Kazakhstani tenge"],"drapeau":"🇰🇿","couleurs":["bleu","jaune","vert"]},{"code":"KE","nom":"Kenya","continent":"Afrique","sousregion":"Eastern Africa","capitale":"Nairobi","enclave":false,"voisins":["ET","SO","SS","TZ","UG"],"superficie":580367,"population":51393010,"langues":["English","Swahili"],"monnaies":["KES"],"monnaienoms":["Kenyan shilling"],"drapeau":"🇰🇪","couleurs":["blanc","noir","rouge","vert"]},{"code":"KG","nom":"Kirghizistan","continent":"Asie","sousregion":"Central Asia","capitale":"Bichkek","enclave":true,"voisins":["CN","KZ","TJ","UZ"],"superficie":199951,"population":6322800,"langues":["Kyrgyz","Russian"],"monnaies":["KGS"],"monnaienoms":["Kyrgyzstani som"],"drapeau":"🇰🇬","couleurs":["jaune","orange","rouge"]},{"code":"KH","nom":"Cambodge","continent":"Asie","sousregion":"South-Eastern Asia","capitale":"Phnom Penh","enclave":false,"voisins":["LA","TH","VN"],"superficie":181035,"population":16249798,"langues":["Khmer"],"monnaies":["KHR","USD"],"monnaienoms":["Cambodian riel","United States dollar"],"drapeau":"🇰🇭","couleurs":["bleu","rouge"]},{"code":"KI","nom":"Kiribati","continent":"Océanie","sousregion":"Micronesia","capitale":"South Tarawa","enclave":false,"voisins":[],"superficie":811,"population":115847,"langues":["English","Gilbertese"],"monnaies":["AUD","KID"],"monnaienoms":["Australian dollar","Kiribati dollar"],"drapeau":"🇰🇮","couleurs":["blanc","bleu","jaune","rouge"]},{"code":"KN","nom":"Saint-Christophe-et-Niévès","continent":"Amériques","sousregion":"Caribbean","capitale":"Basseterre","enclave":false,"voisins":[],"superficie":261,"population":52441,"langues":["English"],"monnaies":["XCD"],"monnaienoms":["Eastern Caribbean dollar"],"drapeau":"🇰🇳","couleurs":["jaune","noir","rouge","vert"]},{"code":"KR","nom":"Corée du Sud","continent":"Asie","sousregion":"Eastern Asia","capitale":"Séoul","enclave":false,"voisins":["KP"],"superficie":100210,"population":51606633,"langues":["Korean"],"monnaies":["KRW"],"monnaienoms":["South Korean won"],"drapeau":"🇰🇷","couleurs":["blanc","bleu","noir","rouge"]},{"code":"KW","nom":"Koweït","continent":"Asie","sousregion":"Western Asia","capitale":"Kuwait City","enclave":false,"voisins":["IQ","SA"],"superficie":17818,"population":4137309,"langues":["Arabic"],"monnaies":["KWD"],"monnaienoms":["Kuwaiti dinar"],"drapeau":"🇰🇼","couleurs":["blanc","noir","rouge","vert"]},{"code":"LA","nom":"Laos","continent":"Asie","sousregion":"South-Eastern Asia","capitale":"Vientiane","enclave":true,"voisins":["MM","KH","CN","TH","VN"],"superficie":236800,"population":7061507,"langues":["Lao"],"monnaies":["LAK"],"monnaienoms":["Lao kip"],"drapeau":"🇱🇦","couleurs":["blanc","bleu","rouge"]},{"code":"LB","nom":"Liban","continent":"Asie","sousregion":"Western Asia","capitale":"Beyrouth","enclave":false,"voisins":["IL","SY"],"superficie":10452,"population":6848925,"langues":["Arabic","French"],"monnaies":["LBP"],"monnaienoms":["Lebanese pound"],"drapeau":"🇱🇧","couleurs":["blanc","rouge","vert"]},{"code":"LR","nom":"Liberia","continent":"Afrique","sousregion":"Western Africa","capitale":"Monrovia","enclave":false,"voisins":["GN","CI","SL"],"superficie":111369,"population":4818977,"langues":["English"],"monnaies":["LRD"],"monnaienoms":["Liberian dollar"],"drapeau":"🇱🇷","couleurs":["blanc","bleu","rouge"]},{"code":"LY","nom":"Libye","continent":"Afrique","sousregion":"Northern Africa","capitale":"Tripoli","enclave":false,"voisins":["DZ","TD","EG","NE","SD","TN"],"superficie":1759540,"population":6678567,"langues":["Arabic"],"monnaies":["LYD"],"monnaienoms":["Libyan dinar"],"drapeau":"🇱🇾","couleurs":["noir","rouge","vert"]},{"code":"LC","nom":"Sainte-Lucie","continent":"Amériques","sousregion":"Caribbean","capitale":"Castries","enclave":false,"voisins":[],"superficie":616,"population":181889,"langues":["English"],"monnaies":["XCD"],"monnaienoms":["Eastern Caribbean dollar"],"drapeau":"🇱🇨","couleurs":["bleu","jaune"]},{"code":"LI","nom":"Liechtenstein","continent":"Europe","sousregion":"Western Europe","capitale":"Vaduz","enclave":true,"voisins":["AT","CH"],"superficie":160,"population":37910,"langues":["German"],"monnaies":["CHF"],"monnaienoms":["Swiss franc"],"drapeau":"🇱🇮","couleurs":["bleu","rouge"]},{"code":"LK","nom":"Sri Lanka","continent":"Asie","sousregion":"Southern Asia","capitale":"Colombo","enclave":false,"voisins":["IN"],"superficie":65610,"population":21670000,"langues":["Sinhala","Tamil"],"monnaies":["LKR"],"monnaienoms":["Sri Lankan rupee"],"drapeau":"🇱🇰","couleurs":["bleu","jaune","orange","rouge"]},{"code":"LS","nom":"Lesotho","continent":"Afrique","sousregion":"Southern Africa","capitale":"Maseru","enclave":true,"voisins":["ZA"],"superficie":30355,"population":2108132,"langues":["English","Sotho"],"monnaies":["LSL","ZAR"],"monnaienoms":["Lesotho loti","South African rand"],"drapeau":"🇱🇸","couleurs":["blanc","bleu","vert"]},{"code":"LT","nom":"Lituanie","continent":"Europe","sousregion":"Northern Europe","capitale":"Vilnius","enclave":false,"voisins":["BY","LV","PL","RU"],"superficie":65300,"population":2801543,"langues":["Lithuanian"],"monnaies":["EUR"],"monnaienoms":["Euro"],"drapeau":"🇱🇹","couleurs":["jaune","rouge","vert"]},{"code":"LU","nom":"Luxembourg","continent":"Europe","sousregion":"Western Europe","capitale":"Luxembourg","enclave":true,"voisins":["BE","FR","DE"],"superficie":2586,"population":607950,"langues":["German","French","Luxembourgish"],"monnaies":["EUR"],"monnaienoms":["Euro"],"drapeau":"🇱🇺","couleurs":["blanc","bleu","rouge"]},{"code":"LV","nom":"Lettonie","continent":"Europe","sousregion":"Northern Europe","capitale":"Riga","enclave":false,"voisins":["BY","EE","LT","RU"],"superficie":64559,"population":1927174,"langues":["Latvian"],"monnaies":["EUR"],"monnaienoms":["Euro"],"drapeau":"🇱🇻","couleurs":["blanc","rouge"]},{"code":"MA","nom":"Maroc","continent":"Afrique","sousregion":"Northern Africa","capitale":"Rabat","enclave":false,"voisins":["DZ","EH","ES"],"superficie":446550,"population":36029138,"langues":["Arabic","Berber"],"monnaies":["MAD"],"monnaienoms":["Moroccan dirham"],"drapeau":"🇲🇦","couleurs":["rouge"]},{"code":"MC","nom":"Monaco","continent":"Europe","sousregion":"Western Europe","capitale":"Monaco","enclave":false,"voisins":["FR"],"superficie":2.02,"population":38682,"langues":["French"],"monnaies":["EUR"],"monnaienoms":["Euro"],"drapeau":"🇲🇨","couleurs":["blanc","rouge"]},{"code":"MD","nom":"Moldavie","continent":"Europe","sousregion":"Eastern Europe","capitale":"Chisinau","enclave":true,"voisins":["RO","UA"],"superficie":33846,"population":2706049,"langues":["Moldavian"],"monnaies":["MDL"],"monnaienoms":["Moldovan leu"],"drapeau":"🇲🇩","couleurs":["bleu","jaune","orange","rouge"]},{"code":"MG","nom":"Madagascar","continent":"Afrique","sousregion":"Eastern Africa","capitale":"Antananarivo","enclave":false,"voisins":[],"superficie":587041,"population":26262368,"langues":["French","Malagasy"],"monnaies":["MGA"],"monnaienoms":["Malagasy ariary"],"drapeau":"🇲🇬","couleurs":["blanc","rouge","vert"]},{"code":"MV","nom":"Maldives","continent":"Asie","sousregion":"Southern Asia","capitale":"Malé","enclave":false,"voisins":[],"superficie":300,"population":515696,"langues":["Maldivian"],"monnaies":["MVR"],"monnaienoms":["Maldivian rufiyaa"],"drapeau":"🇲🇻","couleurs":["rouge","vert"]},{"code":"MX","nom":"Mexique","continent":"Amériques","sousregion":"North America","capitale":"Mexico","enclave":false,"voisins":["BZ","GT","US"],"superficie":1964375,"population":126190788,"langues":["Spanish"],"monnaies":["MXN"],"monnaienoms":["Mexican peso"],"drapeau":"🇲🇽","couleurs":["blanc","rouge","vert"]},{"code":"MH","nom":"Îles Marshall","continent":"Océanie","sousregion":"Micronesia","capitale":"Majuro","enclave":false,"voisins":[],"superficie":181,"population":58413,"langues":["English","Marshallese"],"monnaies":["USD"],"monnaienoms":["United States dollar"],"drapeau":"🇲🇭","couleurs":["blanc","bleu","orange"]},{"code":"MK","nom":"Macédoine du Nord","continent":"Europe","sousregion":"Southeast Europe","capitale":"Skopje","enclave":true,"voisins":["AL","BG","GR","XK","RS"],"superficie":25713,"population":2084367,"langues":["Macedonian"],"monnaies":["MKD"],"monnaienoms":["denar"],"drapeau":"🇲🇰","couleurs":["jaune","rouge"]},{"code":"ML","nom":"Mali","continent":"Afrique","sousregion":"Western Africa","capitale":"Bamako","enclave":true,"voisins":["DZ","BF","GN","CI","MR","NE","SN"],"superficie":1240192,"population":19077690,"langues":["French"],"monnaies":["XOF"],"monnaienoms":["West African CFA franc"],"drapeau":"🇲🇱","couleurs":["jaune","rouge","vert"]},{"code":"MT","nom":"Malte","continent":"Europe","sousregion":"Southern Europe","capitale":"La Valette","enclave":false,"voisins":[],"superficie":316,"population":484630,"langues":["English","Maltese"],"monnaies":["EUR"],"monnaienoms":["Euro"],"drapeau":"🇲🇹","couleurs":["blanc","rouge"]},{"code":"MM","nom":"Birmanie","continent":"Asie","sousregion":"South-Eastern Asia","capitale":"Naypyidaw","enclave":false,"voisins":["BD","CN","IN","LA","TH"],"superficie":676578,"population":53708395,"langues":["Burmese"],"monnaies":["MMK"],"monnaienoms":["Burmese kyat"],"drapeau":"🇲🇲","couleurs":["blanc","jaune","rouge","vert"]},{"code":"ME","nom":"Monténégro","continent":"Europe","sousregion":"Southeast Europe","capitale":"Podgorica","enclave":false,"voisins":["AL","BA","HR","XK","RS"],"superficie":13812,"population":631219,"langues":["Montenegrin"],"monnaies":["EUR"],"monnaienoms":["Euro"],"drapeau":"🇲🇪","couleurs":["jaune","orange","rouge"]},{"code":"MN","nom":"Mongolie","continent":"Asie","sousregion":"Eastern Asia","capitale":"Oulan-Bator","enclave":true,"voisins":["CN","RU"],"superficie":1564110,"population":3170208,"langues":["Mongolian"],"monnaies":["MNT"],"monnaienoms":["Mongolian tögrög"],"drapeau":"🇲🇳","couleurs":["bleu","jaune","rouge"]},{"code":"MZ","nom":"Mozambique","continent":"Afrique","sousregion":"Eastern Africa","capitale":"Maputo","enclave":false,"voisins":["MW","ZA","SZ","TZ","ZM","ZW"],"superficie":801590,"population":29495962,"langues":["Portuguese"],"monnaies":["MZN"],"monnaienoms":["Mozambican metical"],"drapeau":"🇲🇿","couleurs":["jaune","noir","rouge","vert"]},{"code":"MR","nom":"Mauritanie","continent":"Afrique","sousregion":"Western Africa","capitale":"Nouakchott","enclave":false,"voisins":["DZ","ML","SN","EH"],"superficie":1030700,"population":4403319,"langues":["Arabic"],"monnaies":["MRU"],"monnaienoms":["Mauritanian ouguiya"],"drapeau":"🇲🇷","couleurs":["jaune","rouge","vert"]},{"code":"MU","nom":"Île Maurice","continent":"Afrique","sousregion":"Eastern Africa","capitale":"Port-Louis","enclave":false,"voisins":[],"superficie":2040,"population":1265303,"langues":["English","French","Mauritian Creole"],"monnaies":["MUR"],"monnaienoms":["Mauritian rupee"],"drapeau":"🇲🇺","couleurs":["bleu","jaune","rouge","vert"]},{"code":"MW","nom":"Malawi","continent":"Afrique","sousregion":"Eastern Africa","capitale":"Lilongwe","enclave":true,"voisins":["MZ","TZ","ZM"],"superficie":118484,"population":18143315,"langues":["English","Chewa"],"monnaies":["MWK"],"monnaienoms":["Malawian kwacha"],"drapeau":"🇲🇼","couleurs":["noir","rouge","vert"]},{"code":"MY","nom":"Malaisie","continent":"Asie","sousregion":"South-Eastern Asia","capitale":"Kuala Lumpur","enclave":false,"voisins":["BN","ID","TH"],"superficie":330803,"population":31528585,"langues":["English","Malay"],"monnaies":["MYR"],"monnaienoms":["Malaysian ringgit"],"drapeau":"🇲🇾","couleurs":["blanc","bleu","rouge"]},{"code":"NA","nom":"Namibie","continent":"Afrique","sousregion":"Southern Africa","capitale":"Windhoek","enclave":false,"voisins":["AO","BW","ZA","ZM"],"superficie":825615,"population":2448255,"langues":["Afrikaans","German","English","Herero","Khoekhoe","Kwangali","Lozi","Ndonga","Tswana"],"monnaies":["NAD","ZAR"],"monnaienoms":["Namibian dollar","South African rand"],"drapeau":"🇳🇦","couleurs":["bleu","rouge","vert"]},{"code":"NE","nom":"Niger","continent":"Afrique","sousregion":"Western Africa","capitale":"Niamey","enclave":true,"voisins":["DZ","BJ","BF","TD","LY","ML","NG"],"superficie":1267000,"population":22442948,"langues":["French"],"monnaies":["XOF"],"monnaienoms":["West African CFA franc"],"drapeau":"🇳🇪","couleurs":["blanc","orange","vert"]},{"code":"NG","nom":"Nigéria","continent":"Afrique","sousregion":"Western Africa","capitale":"Abuja","enclave":false,"voisins":["BJ","CM","TD","NE"],"superficie":923768,"population":195874740,"langues":["English"],"monnaies":["NGN"],"monnaienoms":["Nigerian naira"],"drapeau":"🇳🇬","couleurs":["blanc","vert"]},{"code":"NI","nom":"Nicaragua","continent":"Amériques","sousregion":"Central America","capitale":"Managua","enclave":false,"voisins":["CR","HN"],"superficie":130373,"population":6465513,"langues":["Spanish"],"monnaies":["NIO"],"monnaienoms":["Nicaraguan córdoba"],"drapeau":"🇳🇮","couleurs":["blanc","bleu"]},{"code":"NL","nom":"Pays-Bas","continent":"Europe","sousregion":"Western Europe","capitale":"Amsterdam","enclave":false,"voisins":["BE","DE"],"superficie":41850,"population":17231624,"langues":["Dutch"],"monnaies":["EUR"],"monnaienoms":["Euro"],"drapeau":"🇳🇱","couleurs":["blanc","bleu","rouge"]},{"code":"NO","nom":"Norvège","continent":"Europe","sousregion":"Northern Europe","capitale":"Oslo","enclave":false,"voisins":["FI","SE","RU"],"superficie":323802,"population":5311916,"langues":["Norwegian Nynorsk","Norwegian Bokmål","Sami"],"monnaies":["NOK"],"monnaienoms":["Norwegian krone"],"drapeau":"🇳🇴","couleurs":["blanc","bleu","rouge"]},{"code":"NP","nom":"Népal","continent":"Asie","sousregion":"Southern Asia","capitale":"Katmandou","enclave":true,"voisins":["CN","IN"],"superficie":147181,"population":28087871,"langues":["Nepali"],"monnaies":["NPR"],"monnaienoms":["Nepalese rupee"],"drapeau":"🇳🇵","couleurs":["bleu","noir","rouge"]},{"code":"NR","nom":"Nauru","continent":"Océanie","sousregion":"Micronesia","capitale":"Yaren","enclave":false,"voisins":[],"superficie":21,"population":12704,"langues":["English","Nauru"],"monnaies":["AUD"],"monnaienoms":["Australian dollar"],"drapeau":"🇳🇷","couleurs":["bleu","jaune"]},{"code":"NZ","nom":"Nouvelle-Zélande","continent":"Océanie","sousregion":"Australia and New Zealand","capitale":"Wellington","enclave":false,"voisins":[],"superficie":270467,"population":4841000,"langues":["English","Māori","New Zealand Sign Language"],"monnaies":["NZD"],"monnaienoms":["New Zealand dollar"],"drapeau":"🇳🇿","couleurs":["blanc","bleu","rouge"]},{"code":"OM","nom":"Oman","continent":"Asie","sousregion":"Western Asia","capitale":"Muscat","enclave":false,"voisins":["SA","AE","YE"],"superficie":309500,"population":4829483,"langues":["Arabic"],"monnaies":["OMR"],"monnaienoms":["Omani rial"],"drapeau":"🇴🇲","couleurs":["blanc","rouge","vert"]},{"code":"PK","nom":"Pakistan","continent":"Asie","sousregion":"Southern Asia","capitale":"Islamabad","enclave":false,"voisins":["AF","CN","IN","IR"],"superficie":881912,"population":212215030,"langues":["English","Urdu"],"monnaies":["PKR"],"monnaienoms":["Pakistani rupee"],"drapeau":"🇵🇰","couleurs":["blanc","vert"]},{"code":"PA","nom":"Panama","continent":"Amériques","sousregion":"Central America","capitale":"Panama","enclave":false,"voisins":["CO","CR"],"superficie":75417,"population":4176873,"langues":["Spanish"],"monnaies":["PAB","USD"],"monnaienoms":["Panamanian balboa","United States dollar"],"drapeau":"🇵🇦","couleurs":["blanc","bleu","rouge"]},{"code":"PE","nom":"Pérou","continent":"Amériques","sousregion":"South America","capitale":"Lima","enclave":false,"voisins":["BO","BR","CL","CO","EC"],"superficie":1285216,"population":31989256,"langues":["Aymara","Quechua","Spanish"],"monnaies":["PEN"],"monnaienoms":["Peruvian sol"],"drapeau":"🇵🇪","couleurs":["blanc","rouge"]},{"code":"PH","nom":"Philippines","continent":"Asie","sousregion":"South-Eastern Asia","capitale":"Manila","enclave":false,"voisins":[],"superficie":342353,"population":106651922,"langues":["English","Filipino"],"monnaies":["PHP"],"monnaienoms":["Philippine peso"],"drapeau":"🇵🇭","couleurs":["blanc","bleu","jaune","rouge"]},{"code":"PW","nom":"Palaos (Palau)","continent":"Océanie","sousregion":"Micronesia","capitale":"Ngerulmud","enclave":false,"voisins":[],"superficie":459,"population":17907,"langues":["English","Palauan"],"monnaies":["USD"],"monnaienoms":["United States dollar"],"drapeau":"🇵🇼","couleurs":["bleu","jaune"]},{"code":"PG","nom":"Papouasie-Nouvelle-Guinée","continent":"Océanie","sousregion":"Melanesia","capitale":"Port Moresby","enclave":false,"voisins":["ID"],"superficie":462840,"population":8606316,"langues":["English","Hiri Motu","Tok Pisin"],"monnaies":["PGK"],"monnaienoms":["Papua New Guinean kina"],"drapeau":"🇵🇬","couleurs":["jaune","noir","rouge"]},{"code":"PL","nom":"Pologne","continent":"Europe","sousregion":"Central Europe","capitale":"Varsovie","enclave":false,"voisins":["BY","CZ","DE","LT","RU","SK","UA"],"superficie":312679,"population":37974750,"langues":["Polish"],"monnaies":["PLN"],"monnaienoms":["Polish złoty"],"drapeau":"🇵🇱","couleurs":["blanc","rouge"]},{"code":"KP","nom":"Corée du Nord","continent":"Asie","sousregion":"Eastern Asia","capitale":"Pyongyang","enclave":false,"voisins":["CN","KR","RU"],"superficie":120538,"population":25549819,"langues":["Korean"],"monnaies":["KPW"],"monnaienoms":["North Korean won"],"drapeau":"🇰🇵","couleurs":["blanc","bleu","rouge"]},{"code":"PT","nom":"Portugal","continent":"Europe","sousregion":"Southern Europe","capitale":"Lisbonne","enclave":false,"voisins":["ES"],"superficie":92090,"population":10283822,"langues":["Portuguese"],"monnaies":["EUR"],"monnaienoms":["Euro"],"drapeau":"🇵🇹","couleurs":["rouge","vert"]},{"code":"PY","nom":"Paraguay","continent":"Amériques","sousregion":"South America","capitale":"Asuncion","enclave":true,"voisins":["AR","BO","BR"],"superficie":406752,"population":6956071,"langues":["Guaraní","Spanish"],"monnaies":["PYG"],"monnaienoms":["Paraguayan guaraní"],"drapeau":"🇵🇾","couleurs":["blanc","bleu","rouge"]},{"code":"PS","nom":"Palestine","continent":"Asie","sousregion":"Western Asia","capitale":"Ramallah","enclave":false,"voisins":["IL","EG","JO"],"superficie":6220,"population":4569087,"langues":["Arabic"],"monnaies":["EGP","ILS","JOD"],"monnaienoms":["Egyptian pound","Israeli new shekel","Jordanian dinar"],"drapeau":"🇵🇸","couleurs":["blanc","noir","rouge","vert"]},{"code":"QA","nom":"Qatar","continent":"Asie","sousregion":"Western Asia","capitale":"Doha","enclave":false,"voisins":["SA"],"superficie":11586,"population":2781677,"langues":["Arabic"],"monnaies":["QAR"],"monnaienoms":["Qatari riyal"],"drapeau":"🇶🇦","couleurs":["blanc","rouge"]},{"code":"RO","nom":"Roumanie","continent":"Europe","sousregion":"Southeast Europe","capitale":"Bucarest","enclave":false,"voisins":["BG","HU","MD","RS","UA"],"superficie":238391,"population":19466145,"langues":["Romanian"],"monnaies":["RON"],"monnaienoms":["Romanian leu"],"drapeau":"🇷🇴","couleurs":["bleu","jaune","rouge"]},{"code":"RU","nom":"Russie","continent":"Europe","sousregion":"Eastern Europe","capitale":"Moscou","enclave":false,"voisins":["AZ","BY","CN","EE","FI","GE","KZ","KP","LV","LT","MN","NO","PL","UA"],"superficie":17098242,"population":144478050,"langues":["Russian"],"monnaies":["RUB"],"monnaienoms":["Russian ruble"],"drapeau":"🇷🇺","couleurs":["blanc","bleu","rouge"]},{"code":"RW","nom":"Rwanda","continent":"Afrique","sousregion":"Eastern Africa","capitale":"Kigali","enclave":true,"voisins":["BI","CD","TZ","UG"],"superficie":26338,"population":12301939,"langues":["English","French","Kinyarwanda"],"monnaies":["RWF"],"monnaienoms":["Rwandan franc"],"drapeau":"🇷🇼","couleurs":["bleu","jaune","vert"]},{"code":"SA","nom":"Arabie Saoudite","continent":"Asie","sousregion":"Western Asia","capitale":"Riyad","enclave":false,"voisins":["IQ","JO","KW","OM","QA","AE","YE"],"superficie":2149690,"population":33699947,"langues":["Arabic"],"monnaies":["SAR"],"monnaienoms":["Saudi riyal"],"drapeau":"🇸🇦","couleurs":["vert"]},{"code":"SD","nom":"Soudan","continent":"Afrique","sousregion":"Northern Africa","capitale":"Khartoum","enclave":false,"voisins":["CF","TD","EG","ER","ET","LY","SS"],"superficie":1886068,"population":41801533,"langues":["Arabic","English"],"monnaies":["SDG"],"monnaienoms":["Sudanese pound"],"drapeau":"🇸🇩","couleurs":["blanc","noir","rouge","vert"]},{"code":"SN","nom":"Sénégal","continent":"Afrique","sousregion":"Western Africa","capitale":"Dakar","enclave":false,"voisins":["GM","GN","GW","ML","MR"],"superficie":196722,"population":15854360,"langues":["French"],"monnaies":["XOF"],"monnaienoms":["West African CFA franc"],"drapeau":"🇸🇳","couleurs":["jaune","rouge","vert"]},{"code":"SG","nom":"Singapour","continent":"Asie","sousregion":"South-Eastern Asia","capitale":"Singapour","enclave":false,"voisins":[],"superficie":710,"population":5638676,"langues":["English","Malay","Tamil","Chinese"],"monnaies":["SGD"],"monnaienoms":["Singapore dollar"],"drapeau":"🇸🇬","couleurs":["blanc","rouge"]},{"code":"SB","nom":"Îles Salomon","continent":"Océanie","sousregion":"Melanesia","capitale":"Honiara","enclave":false,"voisins":[],"superficie":28896,"population":652858,"langues":["English"],"monnaies":["SBD"],"monnaienoms":["Solomon Islands dollar"],"drapeau":"🇸🇧","couleurs":["bleu","jaune","vert"]},{"code":"SL","nom":"Sierra Leone","continent":"Afrique","sousregion":"Western Africa","capitale":"Freetown","enclave":false,"voisins":["GN","LR"],"superficie":71740,"population":7650154,"langues":["English"],"monnaies":["SLL"],"monnaienoms":["Sierra Leonean leone"],"drapeau":"🇸🇱","couleurs":["blanc","bleu","vert"]},{"code":"SV","nom":"Salvador","continent":"Amériques","sousregion":"Central America","capitale":"San Salvador","enclave":false,"voisins":["GT","HN"],"superficie":21041,"population":6420744,"langues":["Spanish"],"monnaies":["USD"],"monnaienoms":["United States dollar"],"drapeau":"🇸🇻","couleurs":["blanc","bleu"]},{"code":"SM","nom":"Saint-Marin","continent":"Europe","sousregion":"Southern Europe","capitale":"Saint-Marin","enclave":true,"voisins":["IT"],"superficie":61,"population":33785,"langues":["Italian"],"monnaies":["EUR"],"monnaienoms":["Euro"],"drapeau":"🇸🇲","couleurs":["blanc","bleu","vert"]},{"code":"SO","nom":"Somalie","continent":"Afrique","sousregion":"Eastern Africa","capitale":"Mogadiscio","enclave":false,"voisins":["DJ","ET","KE"],"superficie":637657,"population":15008154,"langues":["Arabic","Somali"],"monnaies":["SOS"],"monnaienoms":["Somali shilling"],"drapeau":"🇸🇴","couleurs":["bleu"]},{"code":"RS","nom":"Serbie","continent":"Europe","sousregion":"Southeast Europe","capitale":"Belgrade","enclave":true,"voisins":["BA","BG","HR","HU","XK","MK","ME","RO"],"superficie":88361,"population":6963764,"langues":["Serbian"],"monnaies":["RSD"],"monnaienoms":["Serbian dinar"],"drapeau":"🇷🇸","couleurs":["blanc","bleu","rouge"]},{"code":"SS","nom":"Soudan du Sud","continent":"Afrique","sousregion":"Middle Africa","capitale":"Juba","enclave":true,"voisins":["CF","CD","ET","KE","SD","UG"],"superficie":619745,"population":10975920,"langues":["English"],"monnaies":["SSP"],"monnaienoms":["South Sudanese pound"],"drapeau":"🇸🇸","couleurs":["blanc","bleu","noir","rouge","vert"]},{"code":"ST","nom":"São Tomé et Príncipe","continent":"Afrique","sousregion":"Middle Africa","capitale":"São Tomé","enclave":false,"voisins":[],"superficie":964,"population":211028,"langues":["Portuguese"],"monnaies":["STN"],"monnaienoms":["São Tomé and Príncipe dobra"],"drapeau":"🇸🇹","couleurs":["jaune","rouge","vert"]},{"code":"SR","nom":"Surinam","continent":"Amériques","sousregion":"South America","capitale":"Paramaribo","enclave":false,"voisins":["BR","GF","GY"],"superficie":163820,"population":575991,"langues":["Dutch"],"monnaies":["SRD"],"monnaienoms":["Surinamese dollar"],"drapeau":"🇸🇷","couleurs":["blanc","rouge","vert"]},{"code":"SK","nom":"Slovaquie","continent":"Europe","sousregion":"Central Europe","capitale":"Bratislava","enclave":true,"voisins":["AT","CZ","HU","PL","UA"],"superficie":49037,"population":5446771,"langues":["Slovak"],"monnaies":["EUR"],"monnaienoms":["Euro"],"drapeau":"🇸🇰","couleurs":["blanc","bleu","rouge"]},{"code":"SI","nom":"Slovénie","continent":"Europe","sousregion":"Central Europe","capitale":"Ljubljana","enclave":false,"voisins":["AT","HR","IT","HU"],"superficie":20273,"population":2073894,"langues":["Slovene"],"monnaies":["EUR"],"monnaienoms":["Euro"],"drapeau":"🇸🇮","couleurs":["blanc","bleu","rouge"]},{"code":"SE","nom":"Suède","continent":"Europe","sousregion":"Northern Europe","capitale":"Stockholm","enclave":false,"voisins":["FI","NO"],"superficie":450295,"population":10175214,"langues":["Swedish"],"monnaies":["SEK"],"monnaienoms":["Swedish krona"],"drapeau":"🇸🇪","couleurs":["bleu","jaune"]},{"code":"SZ","nom":"Swaziland","continent":"Afrique","sousregion":"Southern Africa","capitale":"Lobamba","enclave":true,"voisins":["MZ","ZA"],"superficie":17364,"population":1136191,"langues":["English","Swazi"],"monnaies":["SZL","ZAR"],"monnaienoms":["Swazi lilangeni","South African rand"],"drapeau":"🇸🇿","couleurs":["blanc","bleu","jaune","noir","rouge"]},{"code":"SC","nom":"Seychelles","continent":"Afrique","sousregion":"Eastern Africa","capitale":"Victoria","enclave":false,"voisins":[],"superficie":452,"population":96762,"langues":["Seychellois Creole","English","French"],"monnaies":["SCR"],"monnaienoms":["Seychellois rupee"],"drapeau":"🇸🇨","couleurs":["blanc","bleu","jaune","rouge","vert"]},{"code":"SY","nom":"Syrie","continent":"Asie","sousregion":"Western Asia","capitale":"Damas","enclave":false,"voisins":["IQ","IL","JO","LB","TR"],"superficie":185180,"population":16906283,"langues":["Arabic"],"monnaies":["SYP"],"monnaienoms":["Syrian pound"],"drapeau":"🇸🇾","couleurs":["blanc","noir","rouge","vert"]},{"code":"TD","nom":"Tchad","continent":"Afrique","sousregion":"Middle Africa","capitale":"N'Djamena","enclave":true,"voisins":["CM","CF","LY","NE","NG","SD"],"superficie":1284000,"population":15477751,"langues":["Arabic","French"],"monnaies":["XAF"],"monnaienoms":["Central African CFA franc"],"drapeau":"🇹🇩","couleurs":["bleu","jaune","rouge"]},{"code":"TG","nom":"Togo","continent":"Afrique","sousregion":"Western Africa","capitale":"Lomé","enclave":false,"voisins":["BJ","BF","GH"],"superficie":56785,"population":7889094,"langues":["French"],"monnaies":["XOF"],"monnaienoms":["West African CFA franc"],"drapeau":"🇹🇬","couleurs":["jaune","rouge","vert"]},{"code":"TH","nom":"Thaïlande","continent":"Asie","sousregion":"South-Eastern Asia","capitale":"Bangkok","enclave":false,"voisins":["MM","KH","LA","MY"],"superficie":513120,"population":69428524,"langues":["Thai"],"monnaies":["THB"],"monnaienoms":["Thai baht"],"drapeau":"🇹🇭","couleurs":["blanc","bleu","rouge"]},{"code":"TJ","nom":"Tadjikistan","continent":"Asie","sousregion":"Central Asia","capitale":"Douchanbé","enclave":true,"voisins":["AF","CN","KG","UZ"],"superficie":143100,"population":9100837,"langues":["Russian","Tajik"],"monnaies":["TJS"],"monnaienoms":["Tajikistani somoni"],"drapeau":"🇹🇯","couleurs":["blanc","jaune","rouge","vert"]},{"code":"TM","nom":"Turkménistan","continent":"Asie","sousregion":"Central Asia","capitale":"Achgabat","enclave":true,"voisins":["AF","IR","KZ","UZ"],"superficie":488100,"population":5850908,"langues":["Russian","Turkmen"],"monnaies":["TMT"],"monnaienoms":["Turkmenistan manat"],"drapeau":"🇹🇲","couleurs":["orange","rouge","vert"]},{"code":"TL","nom":"Timor oriental","continent":"Asie","sousregion":"South-Eastern Asia","capitale":"Dili","enclave":false,"voisins":["ID"],"superficie":14874,"population":1267972,"langues":["Portuguese","Tetum"],"monnaies":["USD"],"monnaienoms":["United States dollar"],"drapeau":"🇹🇱","couleurs":["jaune","noir","rouge"]},{"code":"TO","nom":"Tonga","continent":"Océanie","sousregion":"Polynesia","capitale":"Nuku'alofa","enclave":false,"voisins":[],"superficie":747,"population":103197,"langues":["English","Tongan"],"monnaies":["TOP"],"monnaienoms":["Tongan paʻanga"],"drapeau":"🇹🇴","couleurs":["blanc","rouge"]},{"code":"TT","nom":"Trinité-et-Tobago","continent":"Amériques","sousregion":"Caribbean","capitale":"Port-d'Espagne","enclave":false,"voisins":[],"superficie":5130,"population":1389858,"langues":["English"],"monnaies":["TTD"],"monnaienoms":["Trinidad and Tobago dollar"],"drapeau":"🇹🇹","couleurs":["blanc","noir","rouge"]},{"code":"TN","nom":"Tunisie","continent":"Afrique","sousregion":"Northern Africa","capitale":"Tunis","enclave":false,"voisins":["DZ","LY"],"superficie":163610,"population":11565204,"langues":["Arabic"],"monnaies":["TND"],"monnaienoms":["Tunisian dinar"],"drapeau":"🇹🇳","couleurs":["blanc","rouge"]},{"code":"TR","nom":"Turquie","continent":"Asie","sousregion":"Western Asia","capitale":"Ankara","enclave":false,"voisins":["AM","AZ","BG","GE","GR","IR","IQ","SY"],"superficie":783562,"population":82319724,"langues":["Turkish"],"monnaies":["TRY"],"monnaienoms":["Turkish lira"],"drapeau":"🇹🇷","couleurs":["rouge"]},{"code":"TV","nom":"Tuvalu","continent":"Océanie","sousregion":"Polynesia","capitale":"Funafuti","enclave":false,"voisins":[],"superficie":26,"population":11508,"langues":["English","Tuvaluan"],"monnaies":["AUD","TVD"],"monnaienoms":["Australian dollar","Tuvaluan dollar"],"drapeau":"🇹🇻","couleurs":["blanc","bleu","rouge"]},{"code":"TZ","nom":"Tanzanie","continent":"Afrique","sousregion":"Eastern Africa","capitale":"Dodoma","enclave":false,"voisins":["BI","CD","KE","MW","MZ","RW","UG","ZM"],"superficie":945087,"population":56318348,"langues":["English","Swahili"],"monnaies":["TZS"],"monnaienoms":["Tanzanian shilling"],"drapeau":"🇹🇿","couleurs":["bleu","jaune","noir","vert"]},{"code":"UG","nom":"Ouganda","continent":"Afrique","sousregion":"Eastern Africa","capitale":"Kampala","enclave":true,"voisins":["CD","KE","RW","SS","TZ"],"superficie":241550,"population":42723139,"langues":["English","Swahili"],"monnaies":["UGX"],"monnaienoms":["Ugandan shilling"],"drapeau":"🇺🇬","couleurs":["jaune","noir","rouge"]},{"code":"UA","nom":"Ukraine","continent":"Europe","sousregion":"Eastern Europe","capitale":"Kiev","enclave":false,"voisins":["BY","HU","MD","PL","RO","RU","SK"],"superficie":603500,"population":44622516,"langues":["Ukrainian"],"monnaies":["UAH"],"monnaienoms":["Ukrainian hryvnia"],"drapeau":"🇺🇦","couleurs":["bleu","jaune"]},{"code":"UY","nom":"Uruguay","continent":"Amériques","sousregion":"South America","capitale":"Montevideo","enclave":false,"voisins":["AR","BR"],"superficie":181034,"population":3449299,"langues":["Spanish"],"monnaies":["UYU"],"monnaienoms":["Uruguayan peso"],"drapeau":"🇺🇾","couleurs":["blanc","bleu","jaune"]},{"code":"US","nom":"États-Unis","continent":"Amériques","sousregion":"North America","capitale":"Washington D.C.","enclave":false,"voisins":["CA","MX"],"superficie":9372610,"population":326687501,"langues":["English"],"monnaies":["USD"],"monnaienoms":["United States dollar"],"drapeau":"🇺🇸","couleurs":["blanc","bleu","rouge"]},{"code":"UZ","nom":"Ouzbékistan","continent":"Asie","sousregion":"Central Asia","capitale":"Tachkent","enclave":true,"voisins":["AF","KZ","KG","TJ","TM"],"superficie":447400,"population":32955400,"langues":["Russian","Uzbek"],"monnaies":["UZS"],"monnaienoms":["Uzbekistani soʻm"],"drapeau":"🇺🇿","couleurs":["blanc","bleu","rouge","vert"]},{"code":"VA","nom":"Cité du Vatican","continent":"Europe","sousregion":"Southern Europe","capitale":"Vatican","enclave":true,"voisins":["IT"],"superficie":0.44,"population":825,"langues":["Italian","Latin"],"monnaies":["EUR"],"monnaienoms":["Euro"],"drapeau":"🇻🇦","couleurs":["blanc","jaune"]},{"code":"VC","nom":"Saint-Vincent-et-les-Grenadines","continent":"Amériques","sousregion":"Caribbean","capitale":"Kingstown","enclave":false,"voisins":[],"superficie":389,"population":110210,"langues":["English"],"monnaies":["XCD"],"monnaienoms":["Eastern Caribbean dollar"],"drapeau":"🇻🇨","couleurs":["bleu","jaune","vert"]},{"code":"VE","nom":"Venezuela","continent":"Amériques","sousregion":"South America","capitale":"Caracas","enclave":false,"voisins":["BR","CO","GY"],"superficie":916445,"population":28870195,"langues":["Spanish"],"monnaies":["VES"],"monnaienoms":["Venezuelan bolívar soberano"],"drapeau":"🇻🇪","couleurs":["bleu","jaune","rouge"]},{"code":"VN","nom":"Viêt Nam","continent":"Asie","sousregion":"South-Eastern Asia","capitale":"Hanoï","enclave":false,"voisins":["KH","CN","LA"],"superficie":331212,"population":95540395,"langues":["Vietnamese"],"monnaies":["VND"],"monnaienoms":["Vietnamese đồng"],"drapeau":"🇻🇳","couleurs":["jaune","rouge"]},{"code":"VU","nom":"Vanuatu","continent":"Océanie","sousregion":"Melanesia","capitale":"Port Vila","enclave":false,"voisins":[],"superficie":12189,"population":292680,"langues":["Bislama","English","French"],"monnaies":["VUV"],"monnaienoms":["Vanuatu vatu"],"drapeau":"🇻🇺","couleurs":["jaune","noir","rouge","vert"]},{"code":"WS","nom":"Samoa","continent":"Océanie","sousregion":"Polynesia","capitale":"Apia","enclave":false,"voisins":[],"superficie":2842,"population":196130,"langues":["English","Samoan"],"monnaies":["WST"],"monnaienoms":["Samoan tālā"],"drapeau":"🇼🇸","couleurs":["bleu","rouge"]},{"code":"YE","nom":"Yémen","continent":"Asie","sousregion":"Western Asia","capitale":"Sanaa","enclave":false,"voisins":["OM","SA"],"superficie":527968,"population":28498687,"langues":["Arabic"],"monnaies":["YER"],"monnaienoms":["Yemeni rial"],"drapeau":"🇾🇪","couleurs":["blanc","noir","rouge"]},{"code":"ZA","nom":"Afrique du Sud","continent":"Afrique","sousregion":"Southern Africa","capitale":"Pretoria","enclave":false,"voisins":["BW","LS","MZ","NA","SZ","ZW"],"superficie":1221037,"population":57779622,"langues":["Afrikaans","English","Southern Ndebele","Northern Sotho","Southern Sotho","Swazi","Tswana","Tsonga","Venda","Xhosa","Zulu"],"monnaies":["ZAR"],"monnaienoms":["South African rand"],"drapeau":"🇿🇦","couleurs":["blanc","bleu","jaune","noir","rouge","vert"]},{"code":"ZM","nom":"Zambie","continent":"Afrique","sousregion":"Eastern Africa","capitale":"Lusaka","enclave":true,"voisins":["AO","BW","CD","MW","MZ","NA","TZ","ZW"],"superficie":752612,"population":17351822,"langues":["English"],"monnaies":["ZMW"],"monnaienoms":["Zambian kwacha"],"drapeau":"🇿🇲","couleurs":["noir","orange","rouge","vert"]},{"code":"ZW","nom":"Zimbabwe","continent":"Afrique","sousregion":"Eastern Africa","capitale":"Harare","enclave":true,"voisins":["BW","MZ","ZA","ZM"],"superficie":390757,"population":14439018,"langues":["Chibarwe","English","Kalanga","Khoisan","Ndau","Northern Ndebele","Chewa","Shona","Sotho","Tonga","Tswana","Tsonga","Venda","Xhosa","Zimbabwean Sign Language"],"monnaies":["BWP","CNY","EUR","GBP","INR","JPY","USD","ZAR","ZWB"],"monnaienoms":["Botswana pula","Chinese yuan","Euro","British pound","Indian rupee","Japanese yen","United States dollar","South African rand","Zimbabwean bonds"],"drapeau":"🇿🇼","couleurs":["blanc","jaune","noir","rouge","vert"]}];
+</script>
+<script>
+/* HexaMonde — logique de jeu (grille, critères, score) */
+'use strict';
+
+function normStr(s) {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+/* ---------- Catalogue de critères ---------- */
+function buildCriteria(PAYS) {
+  const C = [];
+  const add = (id, cat, label, fn) => C.push({ id, cat, label, fn });
+
+  // Continents
+  for (const cont of ['Afrique', 'Europe', 'Asie', 'Océanie', 'Amériques'])
+    add('cont-' + cont, 'geo', 'Continent : ' + cont, p => p.continent === cont);
+  add('subr-amsud', 'geo', 'Amérique du Sud', p => p.sousregion === 'South America');
+
+  // Géographie
+  add('enclave', 'geo', 'Sans accès à la mer', p => p.enclave);
+  add('ile', 'geo', 'État insulaire (aucun voisin terrestre)', p => p.voisins.length === 0 && !p.enclave);
+  add('voisins5', 'geo', 'Au moins 5 pays voisins', p => p.voisins.length >= 5);
+
+  const hubs = [['FR', 'la France'], ['DE', "l'Allemagne"], ['RU', 'la Russie'], ['CN', 'la Chine'],
+    ['BR', 'le Brésil'], ['IN', "l'Inde"], ['TR', 'la Turquie'], ['SA', "l'Arabie saoudite"],
+    ['CD', 'la RD Congo'], ['AR', "l'Argentine"], ['PL', 'la Pologne'], ['TZ', 'la Tanzanie']];
+  for (const [cc, nom] of hubs)
+    add('front-' + cc, 'geo', 'Frontalier de ' + nom, p => p.voisins.includes(cc));
+
+  // Statistiques
+  add('sup-max', 'stat', 'Superficie > 500 000 km²', p => p.superficie > 500000);
+  add('sup-min', 'stat', 'Superficie < 50 000 km²', p => p.superficie < 50000);
+  add('pop-max', 'stat', 'Population > 50 millions', p => p.population > 50e6);
+  add('pop-min', 'stat', 'Population < 5 millions', p => p.population < 5e6);
+
+  // Drapeaux
+  const coul = [['rouge', 'rouge'], ['vert', 'vert'], ['bleu', 'bleu'], ['jaune', 'jaune'], ['blanc', 'blanc'], ['noir', 'noir']];
+  for (const [c] of coul)
+    add('flag-' + c, 'flag', 'Drapeau avec du ' + c, p => p.couleurs.includes(c));
+  add('flag-norouge', 'flag', 'Pas de rouge sur le drapeau', p => !p.couleurs.includes('rouge'));
+  add('flag-nobleu', 'flag', 'Pas de bleu sur le drapeau', p => !p.couleurs.includes('bleu'));
+  add('flag-2coul', 'flag', 'Drapeau à 2 couleurs exactement', p => p.couleurs.length === 2);
+
+  // Langues & monnaies
+  const langs = [['French', 'le français'], ['English', "l'anglais"], ['Spanish', "l'espagnol"],
+    ['Arabic', "l'arabe"], ['Portuguese', 'le portugais']];
+  for (const [en, fr] of langs)
+    add('lang-' + en, 'cult', 'Langue officielle : ' + fr, p => p.langues.includes(en));
+  add('mon-eur', 'cult', "Monnaie : l'euro", p => p.monnaies.includes('EUR'));
+  add('mon-dollar', 'cult', 'Monnaie : un « dollar »', p => p.monnaienoms.some(n => /dollar/i.test(n)));
+  add('mon-franc', 'cult', 'Monnaie : un « franc »', p => p.monnaienoms.some(n => /franc/i.test(n)));
+
+  // Capitales & noms — lettres avec assez de pays (>= 8)
+  const capCount = {}, nomCount = {}, contientCount = {};
+  for (const p of PAYS) {
+    if (p.capitale) { const l = normStr(p.capitale)[0]; capCount[l] = (capCount[l] || 0) + 1; }
+    const n = normStr(p.nom)[0]; nomCount[n] = (nomCount[n] || 0) + 1;
+    for (const l of new Set(normStr(p.nom).replace(/[^a-z]/g, ''))) contientCount[l] = (contientCount[l] || 0) + 1;
+  }
+  for (const [l, n] of Object.entries(capCount)) if (n >= 8 && /[a-z]/.test(l))
+    add('cap-' + l, 'cap', 'Capitale commençant par « ' + l.toUpperCase() + ' »', p => p.capitale && normStr(p.capitale)[0] === l);
+  add('cap-meme', 'cap', 'Capitale et pays : même initiale', p => p.capitale && normStr(p.capitale)[0] === normStr(p.nom)[0]);
+  for (const [l, n] of Object.entries(nomCount)) if (n >= 8 && /[a-z]/.test(l))
+    add('nom-' + l, 'nom', 'Nom commençant par « ' + l.toUpperCase() + ' »', p => normStr(p.nom)[0] === l);
+  for (const l of ['z', 'w', 'k', 'q', 'h']) if ((contientCount[l] || 0) >= 8)
+    add('nomc-' + l, 'nom', 'Nom contenant la lettre « ' + l.toUpperCase() + ' »', p => normStr(p.nom).includes(l));
+  add('nom-multi', 'nom', 'Nom en plusieurs mots', p => /[\s-]/.test(p.nom.replace(/^Île/, 'Ile')));
+
+  return C;
+}
+
+/* ---------- Règles de score ---------- */
+const nbLettres = s => normStr(s || '').replace(/[^a-z]/g, '').length;
+const fmtNum = n => (n < 10 ? +n.toFixed(2) : Math.round(n)).toLocaleString('fr-FR');
+const kPop = p => p.population, kSup = p => p.superficie,
+  kLang = p => p.langues.length, kVois = p => p.voisins.length,
+  kCoul = p => p.couleurs.length, kNom = p => nbLettres(p.nom),
+  kCap = p => nbLettres(p.capitale), kDens = p => p.population / Math.max(1, p.superficie);
+const REGLES = [
+  { id: 'minpop', label: 'Le pays le moins peuplé rapporte le plus de points', key: kPop, asc: true, fmt: p => fmtNum(p.population) + ' hab.' },
+  { id: 'maxpop', label: 'Le pays le plus peuplé rapporte le plus de points', key: kPop, asc: false, fmt: p => fmtNum(p.population) + ' hab.' },
+  { id: 'minsup', label: 'Le pays le moins vaste rapporte le plus de points', key: kSup, asc: true, fmt: p => fmtNum(p.superficie) + ' km²' },
+  { id: 'maxsup', label: 'Le pays le plus vaste rapporte le plus de points', key: kSup, asc: false, fmt: p => fmtNum(p.superficie) + ' km²' },
+  { id: 'maxlang', label: 'Le pays avec le plus de langues officielles rapporte le plus de points', key: kLang, asc: false, fmt: p => p.langues.length + (p.langues.length > 1 ? ' langues' : ' langue') },
+  { id: 'minlang', label: 'Le pays avec le moins de langues officielles rapporte le plus de points', key: kLang, asc: true, fmt: p => p.langues.length + (p.langues.length > 1 ? ' langues' : ' langue') },
+  { id: 'maxvois', label: 'Le pays avec le plus de voisins terrestres rapporte le plus de points', key: kVois, asc: false, fmt: p => p.voisins.length + (p.voisins.length > 1 ? ' voisins' : ' voisin') },
+  { id: 'minvois', label: 'Le pays avec le moins de voisins terrestres rapporte le plus de points', key: kVois, asc: true, fmt: p => p.voisins.length + (p.voisins.length > 1 ? ' voisins' : ' voisin') },
+  { id: 'maxcoul', label: 'Le drapeau le plus coloré rapporte le plus de points', key: kCoul, asc: false, fmt: p => p.couleurs.length + (p.couleurs.length > 1 ? ' couleurs' : ' couleur') },
+  { id: 'mincoul', label: 'Le drapeau le moins coloré rapporte le plus de points', key: kCoul, asc: true, fmt: p => p.couleurs.length + (p.couleurs.length > 1 ? ' couleurs' : ' couleur') },
+  { id: 'maxnom', label: 'Le pays au nom le plus long rapporte le plus de points', key: kNom, asc: false, fmt: p => nbLettres(p.nom) + ' lettres' },
+  { id: 'minnom', label: 'Le pays au nom le plus court rapporte le plus de points', key: kNom, asc: true, fmt: p => nbLettres(p.nom) + ' lettres' },
+  { id: 'maxcap', label: 'La capitale au nom le plus long rapporte le plus de points', key: kCap, asc: false, fmt: p => p.capitale + ' (' + nbLettres(p.capitale) + ' lettres)' },
+  { id: 'mincap', label: 'La capitale au nom le plus court rapporte le plus de points', key: kCap, asc: true, fmt: p => p.capitale + ' (' + nbLettres(p.capitale) + ' lettres)' },
+  { id: 'maxdens', label: 'Le pays le plus densément peuplé rapporte le plus de points', key: kDens, asc: false, fmt: p => fmtNum(kDens(p)) + ' hab/km²' },
+  { id: 'mindens', label: 'Le pays le moins densément peuplé rapporte le plus de points', key: kDens, asc: true, fmt: p => fmtNum(kDens(p)) + ' hab/km²' }
+];
+
+/* ---------- RNG (mulberry32) ---------- */
+function mulberry32(seed) {
+  return function () {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function shuffle(arr, rng) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/* ---------- Affectation parfaite (9 pays distincts) ---------- */
+function findAssignment(cands) {
+  const order = [...Array(9).keys()].sort((a, b) => cands[a].length - cands[b].length);
+  const used = new Set();
+  function dfs(k) {
+    if (k === 9) return true;
+    const i = order[k];
+    for (const c of cands[i]) {
+      if (!used.has(c)) {
+        used.add(c);
+        if (dfs(k + 1)) return true;
+        used.delete(c);
+      }
+    }
+    return false;
+  }
+  return dfs(0);
+}
+
+/* ---------- Génération de grille ---------- */
+function genGrid(PAYS, CRIT, seed) {
+  const rng = mulberry32(seed);
+  const MIN_CAND = 2, MAX_CAND = 120;
+  const byCode = Object.fromEntries(PAYS.map(p => [p.code, p]));
+  let regle = REGLES[Math.floor(rng() * REGLES.length)];
+  for (let attempt = 0; attempt < 4000; attempt++) {
+    if (attempt > 0 && attempt % 800 === 0) regle = REGLES[Math.floor(rng() * REGLES.length)];
+    const pool = shuffle(CRIT, rng);
+    // 6 critères, max 2 par catégorie sur chaque axe, >= 3 catégories au total
+    const picked = [];
+    for (const c of pool) {
+      if (picked.length === 6) break;
+      const axis = picked.length < 3 ? picked.slice(0, 3) : picked.slice(3);
+      if (axis.filter(x => x.cat === c.cat).length >= 2) continue;
+      picked.push(c);
+    }
+    if (picked.length < 6) continue;
+    if (new Set(picked.map(c => c.cat)).size < 3) continue;
+    const rows = picked.slice(0, 3), cols = picked.slice(3);
+
+    const cands = [];
+    let ok = true;
+    for (let i = 0; i < 3 && ok; i++) {
+      for (let j = 0; j < 3 && ok; j++) {
+        const list = PAYS.filter(p => rows[i].fn(p) && cols[j].fn(p)).map(p => p.code);
+        if (list.length < MIN_CAND || list.length > MAX_CAND) ok = false;
+        cands[i * 3 + j] = list;
+      }
+    }
+    if (!ok) continue;
+    if (!findAssignment(cands)) continue;
+    // Score parfait (1000 pts) toujours possible : couplage sur les meilleures réponses
+    const tops = cands.map(list => {
+      const ps = list.map(c => byCode[c]);
+      const vals = ps.map(regle.key);
+      const best = regle.asc ? Math.min(...vals) : Math.max(...vals);
+      return ps.filter(p => regle.key(p) === best).map(p => p.code);
+    });
+    if (!findAssignment(tops)) continue;
+    return { rows, cols, cands, regle, seed };
+  }
+  return null;
+}
+
+/* ---------- Points d'une cellule (ex æquo : mêmes points) ---------- */
+function cellSolutions(PAYS, grid, cellIdx) {
+  const byCode = Object.fromEntries(PAYS.map(p => [p.code, p]));
+  const R = grid.regle;
+  const list = grid.cands[cellIdx].map(c => byCode[c]);
+  list.sort((a, b) => R.asc ? R.key(a) - R.key(b) : R.key(b) - R.key(a));
+  const n = list.length;
+  const ptsAt = i => n === 1 ? 100 : Math.round(40 + 60 * (n - 1 - i) / (n - 1));
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const p = list[i];
+    const pts = (i > 0 && R.key(p) === R.key(list[i - 1])) ? out[i - 1].pts : ptsAt(i);
+    out.push({ code: p.code, nom: p.nom, drapeau: p.drapeau, pts, val: R.fmt(p) });
+  }
+  return out;
+}
+
+
+
+</script>
+<script>
+'use strict';
+const CRIT = buildCriteria(PAYS);
+const byCode = Object.fromEntries(PAYS.map(p => [p.code, p]));
+const $ = id => document.getElementById(id);
+
+let grid, placed, errors, score, revealed, currentCell = null, selIdx = -1;
+
+function newGame(seed) {
+  grid = genGrid(PAYS, CRIT, seed ?? Math.floor(Math.random() * 2 ** 31));
+  placed = Array(9).fill(null);
+  errors = 0; score = 0; revealed = false;
+  render();
+}
+
+function render() {
+  $('regle').textContent = grid.regle.label;
+  $('score').textContent = score;
+  $('erreurs').textContent = errors;
+  $('cases').textContent = placed.filter(Boolean).length + '/9';
+  const g = $('grid');
+  g.innerHTML = '';
+  g.appendChild(el('div', 'crit corner'));
+  for (const c of grid.cols) g.appendChild(critEl(c));
+  for (let i = 0; i < 3; i++) {
+    g.appendChild(critEl(grid.rows[i], true));
+    for (let j = 0; j < 3; j++) {
+      const idx = i * 3 + j;
+      const b = el('button', 'cell' + (placed[idx] ? ' filled' : ''));
+      b.id = 'cell' + idx;
+      const hex = el('div', 'hex');
+      paintCell(hex, idx);
+      b.appendChild(hex);
+      b.addEventListener('click', () => onCell(idx));
+      g.appendChild(b);
+    }
+  }
+}
+
+function el(tag, cls, txt) { const e = document.createElement(tag); if (cls) e.className = cls; if (txt) e.textContent = txt; return e; }
+function critEl(c, isRow) { return el('div', 'crit' + (isRow ? ' row' : ''), c.label); }
+
+function paintCell(hex, idx) {
+  hex.innerHTML = '';
+  const pl = placed[idx];
+  if (pl) {
+    hex.appendChild(el('div', 'flag', pl.drapeau));
+    hex.appendChild(el('div', 'nomp', pl.nom));
+    hex.appendChild(el('div', 'ptsp', pl.pts != null ? '+' + pl.pts : ''));
+  } else {
+    hex.appendChild(el('div', 'q', '?'));
+    const remaining = grid.cands[idx].filter(c => !placed.some(pl => pl && pl.code === c)).length;
+    hex.appendChild(el('div', 'cnt', remaining + (remaining > 1 ? ' possibles' : ' possible')));
+  }
+}
+
+function onCell(idx) {
+  if (placed[idx] && !revealed) return; // solutions visibles uniquement en fin de partie
+  currentCell = idx;
+  const r = grid.rows[Math.floor(idx / 3)], c = grid.cols[idx % 3];
+  $('cellCrits').innerHTML = '➡️ <b>' + esc(r.label) + '</b><br>⬇️ <b>' + esc(c.label) + '</b>';
+  if (revealed) {
+    $('cellTitle').textContent = 'Solutions (' + grid.cands[idx].length + ')';
+    $('inputZone').style.display = 'none';
+    const ul = $('solList'); ul.style.display = ''; ul.innerHTML = '';
+    for (const s of cellSolutions(PAYS, grid, idx)) {
+      const li = el('li');
+      const usedElsewhere = placed.some((p, k) => p && k !== idx && p.code === s.code);
+      li.innerHTML = '<span>' + s.drapeau + ' ' + esc(s.nom) +
+        (placed[idx] && placed[idx].code === s.code ? ' ✅' : usedElsewhere ? ' <small>(déjà utilisé)</small>' : '') +
+        '</span><span class="val">' + esc(s.val) + '</span><span class="p">' + s.pts + ' pts</span>';
+      ul.appendChild(li);
+    }
+  } else {
+    $('cellTitle').textContent = 'Choisir un pays';
+    $('inputZone').style.display = '';
+    $('solList').style.display = 'none';
+    $('guessInput').value = '';
+    $('suggList').innerHTML = '';
+    selIdx = -1;
+  }
+  $('cellOverlay').classList.add('open');
+  if (!revealed) setTimeout(() => $('guessInput').focus(), 50);
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+/* Autocomplete */
+$('guessInput').addEventListener('input', e => {
+  const q = normStr(e.target.value.trim());
+  const box = $('suggList'); box.innerHTML = ''; selIdx = -1;
+  if (q.length < 1) return;
+  const starts = PAYS.filter(p => normStr(p.nom).startsWith(q));
+  const contains = PAYS.filter(p => !normStr(p.nom).startsWith(q) && normStr(p.nom).includes(q));
+  for (const p of [...starts, ...contains].slice(0, 8)) {
+    const used = placed.some(pl => pl && pl.code === p.code);
+    const b = el('button', '', '');
+    b.innerHTML = p.drapeau + ' ' + esc(p.nom) + (used ? ' <small>(déjà utilisé)</small>' : '');
+    b.disabled = used;
+    b.addEventListener('click', () => submitGuess(p));
+    box.appendChild(b);
+  }
+});
+$('guessInput').addEventListener('keydown', e => {
+  const btns = [...$('suggList').querySelectorAll('button:not(:disabled)')];
+  if (e.key === 'ArrowDown') { selIdx = Math.min(selIdx + 1, btns.length - 1); mark(btns); e.preventDefault(); }
+  else if (e.key === 'ArrowUp') { selIdx = Math.max(selIdx - 1, 0); mark(btns); e.preventDefault(); }
+  else if (e.key === 'Enter') { (btns[selIdx] || btns[0])?.click(); }
+});
+function mark(btns) { btns.forEach((b, i) => b.classList.toggle('sel', i === selIdx)); }
+
+function submitGuess(p) {
+  const idx = currentCell;
+  const r = grid.rows[Math.floor(idx / 3)], c = grid.cols[idx % 3];
+  if (r.fn(p) && c.fn(p)) {
+    const sols = cellSolutions(PAYS, grid, idx);
+    const s = sols.find(x => x.code === p.code);
+    placed[idx] = { code: p.code, nom: p.nom, drapeau: p.drapeau, pts: s.pts };
+    score += s.pts;
+    // bonus ligne/colonne/grille
+    const row = Math.floor(idx / 3), col = idx % 3;
+    if ([0, 1, 2].every(j => placed[row * 3 + j])) score += 10;
+    if ([0, 1, 2].every(i => placed[i * 3 + col])) score += 10;
+    if (placed.every(Boolean)) score += 40;
+    closeOverlays();
+    render();
+    if (placed.every(Boolean)) endGame();
+  } else {
+    errors++; score = Math.max(0, score - 10);
+    $('erreurs').textContent = errors; $('score').textContent = score;
+    const cell = $('cell' + idx);
+    cell.classList.add('shake');
+    setTimeout(() => cell.classList.remove('shake'), 400);
+    $('guessInput').value = ''; $('suggList').innerHTML = '';
+    $('guessInput').focus();
+  }
+}
+
+function endGame(abandoned) {
+  revealed = true;
+  $('endTitle').textContent = abandoned ? 'Partie abandonnée 🏳️' : 'Grille terminée ! 🎉';
+  $('finalScore').textContent = score + ' PTS';
+  $('finalDetail').textContent = errors + ' erreur' + (errors > 1 ? 's' : '') + ' — règle : ' + grid.regle.label.toLowerCase();
+  $('bestScore').textContent = '';
+  if (!abandoned) {
+    try {
+      const best = Math.max(score, +(localStorage.getItem('worldgrid-best') || 0));
+      localStorage.setItem('worldgrid-best', best);
+      $('bestScore').textContent = '🏅 Meilleur score : ' + best + ' pts';
+    } catch (e) { /* stockage indisponible */ }
+  }
+  $('endOverlay').classList.add('open');
+}
+
+/* Boutons */
+$('newBtn').addEventListener('click', () => newGame());
+$('againBtn').addEventListener('click', () => { closeOverlays(); newGame(); });
+$('revealBtn').addEventListener('click', () => {
+  if (revealed || placed.every(Boolean)) return;
+  if (confirm('Abandonner la partie et révéler les solutions ?')) endGame(true);
+});
+$('helpBtn').addEventListener('click', () => $('helpOverlay').classList.add('open'));
+document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', closeOverlays));
+document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', e => { if (e.target === o) closeOverlays(); }));
+function closeOverlays() { document.querySelectorAll('.overlay').forEach(o => o.classList.remove('open')); }
+
+newGame();
+</script>
+</body>
+</html>
