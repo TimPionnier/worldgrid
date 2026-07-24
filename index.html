@@ -81,7 +81,8 @@ footer{color:var(--muted);font-size:.72rem;padding:12px;text-align:center}
 <body>
 <header>
   <h1><span class="globe">🌍</span> WorldGrid</h1>
-  <div class="regle">🏆 Règle de la partie : <b id="regle"></b></div>
+  <div id="datejour" style="font-size:.8rem;color:var(--muted);margin-top:2px"></div>
+  <div class="regle">🏆 Règle du jour : <b id="regle"></b></div>
   <div class="bar">
     <div class="pts">Score <span class="v" id="score">0</span></div>
     <div class="err">Erreurs <span class="v" id="erreurs">0</span></div>
@@ -91,11 +92,11 @@ footer{color:var(--muted);font-size:.72rem;padding:12px;text-align:center}
 <main>
   <div class="gridwrap" id="grid"></div>
   <div class="actions">
-    <button class="btn" id="newBtn">🔄 Nouvelle grille</button>
     <button class="btn sec" id="revealBtn">🏳️ Abandonner</button>
+    <button class="btn" id="resultBtn" style="display:none">📊 Mon résultat</button>
     <button class="btn sec" id="helpBtn">❓ Comment jouer</button>
   </div>
-  <p class="hint">Chaque pays ne peut servir qu'une seule fois. Les solutions détaillées sont révélées à la fin de la partie.</p>
+  <p class="hint">Une nouvelle grille chaque jour à minuit. Chaque pays ne peut servir qu'une seule fois ; les solutions sont révélées à la fin de la partie.</p>
 </main>
 <footer>WorldGrid — inspiré de hexagrid.fr &middot; 195 pays &middot; données world-countries (ODbL)</footer>
 
@@ -132,7 +133,8 @@ footer{color:var(--muted);font-size:.72rem;padding:12px;text-align:center}
     <p id="finalDetail" style="font-size:.85rem;color:var(--muted)"></p>
     <p id="bestScore" style="font-size:.8rem;margin-top:6px"></p>
     <p style="font-size:.8rem;color:var(--muted);margin-top:8px">Cliquez sur chaque case pour voir le détail des réponses (valeur et points).</p>
-    <div class="actions"><button class="btn sec" data-close>📋 Voir le détail</button><button class="btn" id="againBtn">🔄 Rejouer</button></div>
+    <p id="nextIn" style="font-size:.85rem;font-weight:600;margin-top:8px"></p>
+    <div class="actions"><button class="btn" id="shareBtn">📤 Partager</button><button class="btn sec" data-close>📋 Voir le détail</button></div>
   </div>
 </div>
 
@@ -142,7 +144,7 @@ footer{color:var(--muted);font-size:.72rem;padding:12px;text-align:center}
     <button class="close" data-close>✕</button>
     <h2>Comment jouer</h2>
     <div class="helpbody">
-      <p>Remplissez la grille avec <b>9 pays du monde</b> (195 pays possibles). Chaque case doit respecter le critère de sa ligne <b>et</b> celui de sa colonne.</p>
+      <p>Chaque jour à minuit, une nouvelle grille — la même pour tout le monde. Remplissez-la avec <b>9 pays du monde</b> (195 pays possibles) : chaque case doit respecter le critère de sa ligne <b>et</b> celui de sa colonne. Votre progression est sauvegardée automatiquement.</p>
       <ul>
         <li><b>Un pays ne peut servir qu'une seule fois</b> : choisissez bien par quelle case commencer !</li>
         <li><b>Bonne réponse :</b> 100 pts pour la <i>meilleure</i> réponse selon la règle de la partie ; les autres choix valides rapportent moins (minimum 40 pts).</li>
@@ -377,17 +379,75 @@ const CRIT = buildCriteria(PAYS);
 const byCode = Object.fromEntries(PAYS.map(p => [p.code, p]));
 const $ = id => document.getElementById(id);
 
-let grid, placed, errors, score, revealed, currentCell = null, selIdx = -1;
+let grid, placed, errors, score, revealed, abandoned = false, currentCell = null, selIdx = -1;
 
-function newGame(seed) {
-  grid = genGrid(PAYS, CRIT, seed ?? Math.floor(Math.random() * 2 ** 31));
-  placed = Array(9).fill(null);
-  errors = 0; score = 0; revealed = false;
+/* ---- Grille quotidienne (heure de Paris) ---- */
+const TODAY = new Date().toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' }); // AAAA-MM-JJ
+const DAYSEED = parseInt(TODAY.replace(/-/g, ''), 10);
+
+function saveState() {
+  try {
+    localStorage.setItem('worldgrid-daily', JSON.stringify({ date: TODAY, placed, errors, score, revealed, abandoned }));
+  } catch (e) { }
+}
+function loadState() {
+  try {
+    const s = JSON.parse(localStorage.getItem('worldgrid-daily'));
+    if (s && s.date === TODAY) return s;
+  } catch (e) { }
+  return null;
+}
+
+function newGame() {
+  grid = genGrid(PAYS, CRIT, DAYSEED);
+  const saved = loadState();
+  if (saved) {
+    placed = saved.placed; errors = saved.errors; score = saved.score;
+    revealed = saved.revealed; abandoned = saved.abandoned;
+  } else {
+    placed = Array(9).fill(null);
+    errors = 0; score = 0; revealed = false; abandoned = false;
+  }
+  $('datejour').textContent = new Date().toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   render();
+  if (revealed) { $('revealBtn').style.display = 'none'; $('resultBtn').style.display = ''; }
+}
+
+function shareText() {
+  const rows = [];
+  for (let i = 0; i < 3; i++)
+    rows.push([0, 1, 2].map(j => { const pl = placed[i * 3 + j]; return !pl ? '⬛' : pl.pts === 100 ? '🟩' : '🟨'; }).join(''));
+  const dateFr = new Date().toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' });
+  return '🌍 WorldGrid ' + dateFr + '\n' + rows.join('\n') + '\n' + score + ' pts — ' +
+    (errors ? errors + ' erreur' + (errors > 1 ? 's' : '') : 'sans erreur') +
+    '\nhttps://timpionnier.github.io/worldgrid/';
+}
+function doShare(btn) {
+  const txt = shareText();
+  const done = () => { const o = btn.textContent; btn.textContent = '✅ Copié !'; setTimeout(() => btn.textContent = o, 1600); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done, () => fallbackCopy(txt, done));
+  else fallbackCopy(txt, done);
+}
+function fallbackCopy(txt, done) {
+  const ta = document.createElement('textarea');
+  ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); done(); } catch (e) { }
+  ta.remove();
+}
+
+function msNextGrid() {
+  const paris = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+  const next = new Date(paris); next.setHours(24, 0, 0, 0);
+  return next - paris;
+}
+function nextGridLabel() {
+  const ms = msNextGrid(), h = Math.floor(ms / 3600000), m = Math.floor(ms % 3600000 / 60000);
+  return '⏳ Prochaine grille dans ' + (h > 0 ? h + ' h ' : '') + m + ' min';
 }
 
 function render() {
-  $('regle').textContent = grid.regle.label;
+  $('regle').textContent = grid.regle.label + (revealed ? ' — ' + nextGridLabel().replace('⏳ ', '') : '');
   $('score').textContent = score;
   $('erreurs').textContent = errors;
   $('cases').textContent = placed.filter(Boolean).length + '/9';
@@ -497,11 +557,13 @@ function submitGuess(p) {
     if ([0, 1, 2].every(j => placed[row * 3 + j])) score += 10;
     if ([0, 1, 2].every(i => placed[i * 3 + col])) score += 10;
     if (placed.every(Boolean)) score += 40;
+    saveState();
     closeOverlays();
     render();
     if (placed.every(Boolean)) endGame();
   } else {
     errors++; score = Math.max(0, score - 10);
+    saveState();
     $('erreurs').textContent = errors; $('score').textContent = score;
     const cell = $('cell' + idx);
     cell.classList.add('shake');
@@ -511,8 +573,12 @@ function submitGuess(p) {
   }
 }
 
-function endGame(abandoned) {
+function endGame(isAbandon) {
   revealed = true;
+  if (isAbandon) abandoned = true;
+  saveState();
+  $('revealBtn').style.display = 'none';
+  $('resultBtn').style.display = '';
   $('endTitle').textContent = abandoned ? 'Partie abandonnée 🏳️' : 'Grille terminée ! 🎉';
   $('finalScore').textContent = score + ' PTS';
   $('finalDetail').textContent = errors + ' erreur' + (errors > 1 ? 's' : '') + ' — règle : ' + grid.regle.label.toLowerCase();
@@ -524,7 +590,9 @@ function endGame(abandoned) {
       $('bestScore').textContent = '🏅 Meilleur score : ' + best + ' pts';
     } catch (e) { /* stockage indisponible */ }
   }
+  $('nextIn').textContent = nextGridLabel();
   $('endOverlay').classList.add('open');
+  render();
 }
 
 /* Carte du monde */
@@ -563,12 +631,16 @@ $('mapClose').addEventListener('click', () => $('mapOverlay').classList.remove('
 $('mapOverlay').addEventListener('click', e => { if (e.target === $('mapOverlay')) $('mapOverlay').classList.remove('open'); });
 
 /* Boutons */
-$('newBtn').addEventListener('click', () => newGame());
-$('againBtn').addEventListener('click', () => { closeOverlays(); newGame(); });
 $('revealBtn').addEventListener('click', () => {
   if (revealed || placed.every(Boolean)) return;
-  if (confirm('Abandonner la partie et révéler les solutions ?')) endGame(true);
+  if (confirm('Abandonner la grille du jour et révéler les solutions ? Vous ne pourrez pas rejouer avant demain.')) endGame(true);
 });
+$('shareBtn').addEventListener('click', e => doShare(e.currentTarget));
+$('resultBtn').addEventListener('click', () => { $('nextIn').textContent = nextGridLabel(); $('endOverlay').classList.add('open'); });
+/* nouvelle grille automatique si on laisse l'onglet ouvert après minuit */
+setInterval(() => {
+  if (new Date().toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' }) !== TODAY) location.reload();
+}, 60000);
 $('helpBtn').addEventListener('click', () => $('helpOverlay').classList.add('open'));
 document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', closeOverlays));
 document.querySelectorAll('.overlay:not(#mapOverlay)').forEach(o => o.addEventListener('click', e => { if (e.target === o) closeOverlays(); }));
