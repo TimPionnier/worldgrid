@@ -360,18 +360,22 @@ function genGrid(PAYS, CRIT, seed) {
 }
 
 /* ---------- Points d'une cellule ----------
-   Répartition proportionnelle à la valeur : meilleure valeur = 100 pts,
-   pire = 40 pts, les autres au prorata de leur position entre les deux.
+   Répartition proportionnelle à la valeur sur l'échelle globale :
+   meilleure valeur de la cellule = 100 pts, les autres diminuent
+   proportionnellement à leur écart par rapport au meilleur, rapporté
+   à l'étendue globale (min–max de tous les pays). Minimum 40 pts.
    Même valeur = mêmes points, toujours. */
 function cellSolutions(PAYS, grid, cellIdx) {
   const byCode = Object.fromEntries(PAYS.map(p => [p.code, p]));
   const R = grid.regle;
   const list = grid.cands[cellIdx].map(c => byCode[c]);
   list.sort((a, b) => R.asc ? R.key(a) - R.key(b) : R.key(b) - R.key(a));
-  const vBest = R.key(list[0]), vWorst = R.key(list[list.length - 1]);
+  const vBest = R.key(list[0]);
+  const allVals = PAYS.map(R.key);
+  const globalRange = Math.max(...allVals) - Math.min(...allVals);
   return list.map(p => ({
     code: p.code, nom: p.nom, drapeau: p.drapeau, val: R.fmt(p),
-    pts: vBest === vWorst ? 100 : Math.round(40 + 60 * (R.key(p) - vWorst) / (vBest - vWorst))
+    pts: globalRange === 0 ? 100 : Math.max(40, Math.round(100 - 60 * Math.abs(R.key(p) - vBest) / globalRange))
   }));
 }
 
