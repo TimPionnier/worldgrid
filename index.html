@@ -190,8 +190,8 @@ function buildCriteria(PAYS) {
   add('enclave', 'geo', 'Sans accès à la mer', p => p.enclave);
   add('ile', 'geo', 'État insulaire (aucun voisin terrestre)', p => p.voisins.length === 0 && !p.enclave);
   add('voisins5', 'geo', 'Au moins 5 pays voisins', p => p.voisins.length >= 5);
-  add('hemi-n', 'geo', 'Hémisphère Nord', p => p.lat >= 0);
-  add('hemi-s', 'geo', 'Hémisphère Sud', p => p.lat < 0);
+  add('hemi-n', 'geo', 'Hémisphère Nord', p => p.latN > 0);
+  add('hemi-s', 'geo', 'Hémisphère Sud', p => p.latS < 0);
   add('mer-med', 'geo', 'Côtier de la mer Méditerranée', p => p.mers.includes('med'));
   add('mer-atl', 'geo', "Côtier de l'océan Atlantique", p => p.mers.includes('atl'));
   add('mer-pac', 'geo', "Côtier de l'océan Pacifique", p => p.mers.includes('pac'));
@@ -688,6 +688,7 @@ setInterval(() => {
 $('helpBtn').addEventListener('click', () => $('helpOverlay').classList.add('open'));
 document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', closeOverlays));
 document.querySelectorAll('.overlay:not(#mapOverlay)').forEach(o => o.addEventListener('click', e => { if (e.target === o) closeOverlays(); }));
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeOverlays(); });
 function closeOverlays() { document.querySelectorAll('.overlay').forEach(o => o.classList.remove('open')); }
 
 newGame();
